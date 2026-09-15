@@ -1,7 +1,4 @@
 # 0-infra/Makefile — Tart VM 프로비저닝 (tart CLI 직접 래핑)
-#
-# Terraform의 cirruslabs/tart provider는 실존하지 않음을 확인 (2026-09-15) —
-# 선언적 Terraform 대신, tart CLI를 감싼 이 Makefile로 VM 생명주기를 관리한다.
 
 IMAGE      ?= ghcr.io/cirruslabs/ubuntu:24.04
 CPU_COUNT  ?= 4
