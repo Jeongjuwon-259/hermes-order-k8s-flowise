@@ -9,7 +9,7 @@ Mac mini M4(64GB) 로컬 LLM 환경 위에 얹는 개인용 kubeadm 클러스터
 ```
 Tart 설치 (brew, 1회성 수동)
       ↓
-0-infra/   : Terraform(cirruslabs/tart provider)로 VM 생성 → Ansible로 접속/기본 설정
+0-infra/   : Makefile(tart CLI 래핑)로 VM 생성 → Ansible로 접속/기본 설정
       ↓
 1-cluster/ : kubeadm 클러스터 구성 (Ansible playbook 내 포함) + Calico + MetalLB
       ↓
@@ -20,7 +20,9 @@ Tart 설치 (brew, 1회성 수동)
 4-tools/   : 관측성(모니터링) — 추후 도입
 ```
 
-**역할 분리 원칙**: VM 프로비저닝은 Terraform, 노드 접속 후 모든 설정(패키지 설치·kubeadm·CNI 적용)은 Ansible이 담당한다. 이 경계를 섞지 않는다.
+**역할 분리 원칙**: VM 프로비저닝은 Makefile(`tart` CLI 직접 래핑), 노드 접속 후 모든 설정(패키지 설치·kubeadm·CNI 적용)은 Ansible이 담당한다. 이 경계를 섞지 않는다.
+
+> ⚠️ 당초 Terraform `cirruslabs/tart` provider를 쓸 계획이었으나 **해당 provider가 실존하지 않음을 확인**(2026-09-15) — 선언적 Terraform 레이어 없이, Makefile이 `tart clone/set/run/stop/delete`를 직접 호출하는 방식으로 전환.
 
 ---
 
@@ -47,14 +49,14 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 2. `0-infra/` — VM 프로비저닝
 
-- **도구**: Tart(설치만 수동) + Terraform(`cirruslabs/tart` provider) + Ansible
-- **VM 사양**: node-1(control-plane) 14GB/4vCPU, node-2(worker) 14GB/4vCPU
+- **도구**: Tart(설치만 수동) + Makefile(`tart` CLI 래핑) + Ansible
+- **VM 사양**: node-1(control-plane) 14GB/4vCPU, node-2(worker) 14GB/4vCPU, 디스크 170GB
 - **OS**: Ubuntu Server 24.04 LTS — Tart 공식 레지스트리에 Rocky Linux 사전 빌드 이미지가 없어 채택 (Rocky 선호는 유지되나 인프라 제약상 Ubuntu로 결정)
 - **네트워크(iptime 게이트웨이 기준)**:
   - VM은 브리지 모드로 iptime 서브넷에서 직접 IP 수령
   - 각 노드 고정 IP 예약(MAC 기준) — kubeadm 인증서 SAN/etcd 피어링 안정성 확보
   - 외부 접근은 포트포워딩 대신 Tailscale/WireGuard VPN 권장
-- **파일**: `providers.tf`, `main.tf`(`resource "tart_vm"` x2), `outputs.tf`(노드 IP), Ansible `inventory.yml`(Terraform output 연동), `playbook.yml`
+- **파일**: `Makefile`(`pull`/`up`/`down`/`status`/`ip`/`inventory`/`clean` 타깃, `tart clone`→`tart set`→`tart run`을 순서대로 호출), Ansible `inventory/hosts.ini`(`make inventory`가 생성), `playbook.yml`
 
 ---
 
@@ -159,5 +161,7 @@ Tart 설치 (brew, 1회성 수동)
 ## 9. 결정 로그
 
 - VM 노드 스펙 15GB×2(총 30GB) → **14GB×2(총 28GB)로 하향 조정** (2026-09-15). 새 예산(~26~30GB) 안에 더 여유 있게 들어옴.
+- 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
+- **0-infra VM 프로비저닝: Terraform → Makefile 전환** (2026-09-15). Terraform `cirruslabs/tart` provider가 실존하지 않음을 확인 — 선언적 IaC 레이어 없이 `tart` CLI를 직접 래핑한 Makefile(`0-infra/Makefile`)로 대체. 기존 `providers.tf`/`main.tf`/`outputs.tf`/`variables.tf`는 삭제됨.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
