@@ -13,7 +13,7 @@ variable "node_cpu_count" {
 variable "node_memory_mb" {
   description = "Memory per node in MB"
   type        = number
-  default     = 15360
+  default     = 14336
 }
 
 variable "node_disk_gb" {

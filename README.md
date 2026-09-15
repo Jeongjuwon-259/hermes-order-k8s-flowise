@@ -48,7 +48,7 @@ Tart 설치 (brew, 1회성 수동)
 ## 2. `0-infra/` — VM 프로비저닝
 
 - **도구**: Tart(설치만 수동) + Terraform(`cirruslabs/tart` provider) + Ansible
-- **VM 사양**: node-1(control-plane) 15GB/4vCPU, node-2(worker) 15GB/4vCPU
+- **VM 사양**: node-1(control-plane) 14GB/4vCPU, node-2(worker) 14GB/4vCPU
 - **OS**: Ubuntu Server 24.04 LTS — Tart 공식 레지스트리에 Rocky Linux 사전 빌드 이미지가 없어 채택 (Rocky 선호는 유지되나 인프라 제약상 Ubuntu로 결정)
 - **네트워크(iptime 게이트웨이 기준)**:
   - VM은 브리지 모드로 iptime 서브넷에서 직접 IP 수령
@@ -158,6 +158,6 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 9. 결정 로그
 
-- VM 노드 스펙은 15GB×2(총 30GB) 유지. 새 예산(~26~30GB) 대비 여유가 빠듯하지만 감수하고 진행. 실제 운영 중 OOM 발생 시 재검토.
+- VM 노드 스펙 15GB×2(총 30GB) → **14GB×2(총 28GB)로 하향 조정** (2026-09-15). 새 예산(~26~30GB) 안에 더 여유 있게 들어옴.
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
