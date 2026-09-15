@@ -1,5 +1,7 @@
 # 0-infra/Makefile — Tart VM 프로비저닝 (tart CLI 직접 래핑)
 
+export TART_HOME ?= /Users/blue/iac-project
+
 IMAGE      ?= ghcr.io/cirruslabs/ubuntu:24.04
 CPU_COUNT  ?= 4
 MEMORY_MB  ?= 14336

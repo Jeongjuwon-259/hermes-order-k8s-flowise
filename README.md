@@ -50,6 +50,7 @@ Tart 설치 (brew, 1회성 수동)
 - **도구**: Tart(설치만 수동) + Makefile(`tart` CLI 래핑) + Ansible
 - **VM 사양**: node-1(control-plane) 14GB/4vCPU, node-2(worker) 14GB/4vCPU, 디스크 170GB
 - **OS**: Ubuntu Server 24.04 LTS — Tart 공식 레지스트리에 Rocky Linux 사전 빌드 이미지가 없어 채택 (Rocky 선호는 유지되나 인프라 제약상 Ubuntu로 결정)
+- **VM 이미지/디스크 저장 위치**: `TART_HOME=/Users/blue/iac-project` (기본 `~/.tart` 대신 지정)
 - **네트워크(iptime 게이트웨이 기준)**:
   - VM은 브리지 모드로 iptime 서브넷에서 직접 IP 수령
   - 각 노드 고정 IP 예약(MAC 기준) — kubeadm 인증서 SAN/etcd 피어링 안정성 확보
@@ -160,5 +161,6 @@ Tart 설치 (brew, 1회성 수동)
 
 - VM 노드 스펙 15GB×2(총 30GB) → **14GB×2(총 28GB)로 하향 조정** (2026-09-15). 새 예산(~26~30GB) 안에 더 여유 있게 들어옴.
 - 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
+- Tart VM 이미지/디스크 저장 위치를 `TART_HOME=/Users/blue/iac-project`로 지정 (2026-09-15). 기본값 `~/.tart` 대신 사용.
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
