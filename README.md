@@ -22,8 +22,6 @@ Tart 설치 (brew, 1회성 수동)
 
 **역할 분리 원칙**: VM 프로비저닝은 Makefile(`tart` CLI 직접 래핑), 노드 접속 후 모든 설정(패키지 설치·kubeadm·CNI 적용)은 Ansible이 담당한다. 이 경계를 섞지 않는다.
 
-> ⚠️ 당초 Terraform `cirruslabs/tart` provider를 쓸 계획이었으나 **해당 provider가 실존하지 않음을 확인**(2026-09-15) — 선언적 Terraform 레이어 없이, Makefile이 `tart clone/set/run/stop/delete`를 직접 호출하는 방식으로 전환.
-
 ---
 
 ## 1. 리소스 예산 (Mac mini M4, 64GB)
@@ -163,5 +161,4 @@ Tart 설치 (brew, 1회성 수동)
 - VM 노드 스펙 15GB×2(총 30GB) → **14GB×2(총 28GB)로 하향 조정** (2026-09-15). 새 예산(~26~30GB) 안에 더 여유 있게 들어옴.
 - 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
-- **0-infra VM 프로비저닝: Terraform → Makefile 전환** (2026-09-15). Terraform `cirruslabs/tart` provider가 실존하지 않음을 확인 — 선언적 IaC 레이어 없이 `tart` CLI를 직접 래핑한 Makefile(`0-infra/Makefile`)로 대체. 기존 `providers.tf`/`main.tf`/`outputs.tf`/`variables.tf`는 삭제됨.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
