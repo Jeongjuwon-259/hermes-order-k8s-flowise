@@ -19,5 +19,5 @@ variable "node_memory_mb" {
 variable "node_disk_gb" {
   description = "Disk size per node in GB"
   type        = number
-  default     = 100
+  default     = 170
 }
