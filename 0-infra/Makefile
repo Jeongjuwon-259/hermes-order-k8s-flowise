@@ -23,6 +23,12 @@
 # 6. `tart run ... &`를 make 자식 프로세스로만 띄우면, make 자체가 kill되거나
 #    타임아웃될 때 VM 프로세스까지 같이 죽는다. 반드시 `nohup ... & disown`으로
 #    쉘/make의 프로세스 그룹에서 완전히 분리해서 기동한다.
+# 7. clone 직후 node-1/node-2는 /etc/machine-id가 동일함. systemd-networkd DHCPv4의
+#    기본 ClientIdentifier=duid는 이 machine-id를 해시해서 만들어지므로, 두 VM이
+#    macOS DHCP 서버에게 "같은 클라이언트"로 보여 lease가 충돌/오염될 수 있다
+#    (node-2 bridged 무응답 이슈의 유력 원인, KNOWN_ISSUES.md 참고). NAT 부팅 직후
+#    `cloud-init clean --machine-id` + 재부팅으로 고유 ID를 재생성시킨다(fix-identity).
+#    이 재부팅은 안전함 — 아직 netplan static 설정 전이라 교훈#3의 위험과 무관.
 
 export TART_HOME ?= /Users/blue/iac-project
 
@@ -46,7 +52,7 @@ NODE2_IP    := 192.168.0.202
 
 .PHONY: all pull up down status ip inventory clean $(NODES) \
         configure-network configure-network-node-1 configure-network-node-2 bridged-up \
-        bootstrap verify
+        bootstrap verify fix-identity fix-identity-node-1 fix-identity-node-2
 
 all: up
 
@@ -84,7 +90,28 @@ ip:
 	@echo "node-1: $$(tart ip node-1 --wait 60)"
 	@echo "node-2: $$(tart ip node-2 --wait 60)"
 
-## [2단계] NAT IP로 SSH 접속해 게스트에 정적 IP netplan 주입 (최초 1회, up 이후 실행)
+## [1.5단계] clone VM의 machine-id/DUID 중복 해결 (교훈 #7) — up 직후, configure-network 전에 실행.
+## DHCP가 node-1/node-2를 같은 클라이언트로 착각해 lease를 충돌시키는 문제를 방지한다.
+## cloud-init 공식 권장 방식(golden image clone 대응)으로 재부팅 시 고유 ID를 재생성시킨다.
+fix-identity: fix-identity-node-1 fix-identity-node-2
+
+fix-identity-node-1:
+	@echo "[node-1] NAT IP 대기 중..."
+	$(eval NATIP1 := $(shell tart ip node-1 --wait 60))
+	@echo "[node-1] NAT IP=$(NATIP1) — machine-id 초기화 후 재부팅"
+	sshpass -p '$(SSH_PASS)' ssh $(SSH_OPTS) $(SSH_USER)@$(NATIP1) 'sudo cloud-init clean --machine-id && sudo reboot' || true
+	@echo "[node-1] 재부팅 중... 20초 대기"
+	@sleep 20
+
+fix-identity-node-2:
+	@echo "[node-2] NAT IP 대기 중..."
+	$(eval NATIP2 := $(shell tart ip node-2 --wait 60))
+	@echo "[node-2] NAT IP=$(NATIP2) — machine-id 초기화 후 재부팅"
+	sshpass -p '$(SSH_PASS)' ssh $(SSH_OPTS) $(SSH_USER)@$(NATIP2) 'sudo cloud-init clean --machine-id && sudo reboot' || true
+	@echo "[node-2] 재부팅 중... 20초 대기"
+	@sleep 20
+
+## [2단계] NAT IP로 SSH 접속해 게스트에 정적 IP netplan 주입 (최초 1회, fix-identity 이후 실행)
 ## 주의(교훈 #2,#3,#4): scp 대신 ssh heredoc으로 원격에서 직접 파일 작성 —
 ## netplan generate로 문법 검증 → apply까지 이 타깃 안에서 끝내고, 재부팅 없이
 ## 바로 down+bridged-up으로 넘어가야 한다 (NAT 상태로 재부팅하면 cloud-init이
@@ -162,11 +189,14 @@ bridged-up:
 	@echo "bridged 기동됨 — node-1=$(NODE1_IP), node-2=$(NODE2_IP) (NET_IFACE=$(NET_IFACE))"
 	@echo "30~40초 후 'make verify'로 응답 확인할 것 (tart ip 조회는 불신뢰)"
 
-## 부트스트랩 전체 자동화: up → configure-network → down → bridged-up → verify
+## 부트스트랩 전체 자동화: up → fix-identity → configure-network → down → bridged-up → verify
 ## VM을 지웠다가 처음부터 다시 만들 때 이 타깃 하나로 끝까지 간다.
 bootstrap: up
-	@echo "NAT 부팅 완료, 정적 IP 주입 전 20초 대기..."
+	@echo "NAT 부팅 완료, machine-id 중복 해결 전 20초 대기..."
 	@sleep 20
+	$(MAKE) fix-identity
+	@echo "machine-id 재생성 완료, 정적 IP 주입 전 10초 대기..."
+	@sleep 10
 	$(MAKE) configure-network
 	@echo "netplan apply 완료, 재부팅 없이 bridged로 전환..."
 	@sleep 5

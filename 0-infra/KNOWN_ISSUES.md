@@ -1,6 +1,31 @@
 # 0-infra 알려진 이슈 (미해결)
 
-## [OPEN] node-2: bridged 모드 전환 후 정적 IP 무응답
+## [TESTING] node-2: bridged 모드 전환 후 정적 IP 무응답
+
+### 2026-09-16 업데이트 — 유력 원인 발견, 수정 적용됨 (Mac mini 재검증 대기)
+
+**근거 확보된 원인**: clone 직후 node-1/node-2는 `/etc/machine-id`가 동일함.
+systemd-networkd DHCPv4의 기본 `ClientIdentifier=duid`는 이 machine-id를
+해시해서 DUID를 생성하므로, macOS DHCP 서버가 두 VM을 **같은 클라이언트로
+착각**해 lease를 충돌/오염시킬 수 있음 (NAT 부트스트랩 단계에서
+`tart ip node-2`가 잘못된 값을 반환하거나 `configure-network-node-2`가
+의도한 VM과 다른 대상에 접속했을 가능성).
+
+> 출처: [canonical/cloud-init#4066](https://github.com/canonical/cloud-init/issues/4066),
+> [Ubuntu 20.04 cloned VM same DHCP IP fix](https://techblog.jeppson.org/2020/05/ubuntu-20-04-cloned-vm-same-dhcp-ip-fix/)
+
+**적용된 수정**: `0-infra/Makefile`에 `fix-identity`/`fix-identity-node-1`/
+`fix-identity-node-2` 타깃 추가. `up` 직후, `configure-network` 전에
+`sudo cloud-init clean --machine-id && sudo reboot`로 고유 machine-id를
+재생성시킴 (cloud-init 공식 권장 방식, golden image clone 대응). `bootstrap`
+타깃에 자동으로 끼워넣음 (`up → fix-identity → configure-network → ...`).
+
+**아직 Mac mini 실기로 재검증 안 됨** — 이 수정이 실제로 node-2 무응답을
+해결하는지는 다음 `make bootstrap` (또는 `make fix-identity` 단독) 실행
+결과로 확인 필요. 해결 안 되면 아래 "미확인/추정 원인" 2, 3번(타이밍/레이스
+컨디션, ARP 캐시)으로 계속 조사.
+
+---
 
 ### 증상
 `make bootstrap` 실행 시 node-1은 완전히 성공(정적 IP `192.168.0.201`,
