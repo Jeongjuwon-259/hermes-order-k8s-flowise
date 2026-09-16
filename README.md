@@ -20,9 +20,13 @@ Tart 설치 (brew, 1회성 수동)
 3-workloads/: Flowise 등 애플리케이션 배포
       ↓
 4-tools/   : 관측성(모니터링) — 추후 도입
+      ↓
+5-gitops/  : ArgoCD Application CR — 2-services/3-workloads 경로를 가리킴 (아래 참고)
 ```
 
 **역할 분리 원칙**: VM 프로비저닝은 Makefile(`tart` CLI 직접 래핑), 노드 접속 후 모든 설정(패키지 설치·kubeadm·CNI 적용)은 Ansible이 담당한다. 이 경계를 섞지 않는다.
+
+**GitOps 리포 구조**: ArgoCD 매니페스트(`5-gitops/`)와 실제 워크로드 소스(`2-services/`, `3-workloads/`)를 같은 리포에 두되, ArgoCD `Application`의 `path`로 경계를 분리한다 — 인프라 프로비저닝 코드(0-infra/1-cluster)는 ArgoCD가 감시하지 않음. 솔로 프로젝트라 리포를 나누는 관리 비용이 아직 정당화되지 않는다고 판단 (2026-09-16 결정). 재사용성이 필요해지거나 커밋 이력이 너무 섞여 불편해지면 `git subtree split`으로 이력 보존하며 분리.
 
 ---
 
@@ -147,13 +151,22 @@ Tart 설치 (brew, 1회성 수동)
 
 ---
 
-## 7. `.github/workflows/` — CI/CD
+## 7. `5-gitops/` — ArgoCD Application 정의
+
+- ArgoCD가 실제로 감시(sync)하는 대상 — `Application`(필요 시 App-of-Apps 패턴의 root Application) CR을 여기 둠
+- 각 `Application.spec.source.path`는 같은 리포의 `2-services/`, `3-workloads/` 하위 경로를 가리킴 — 매니페스트 원본은 옮기지 않고 그대로 둠
+- `0-infra/`, `1-cluster/`(인프라 프로비저닝 코드)는 ArgoCD 감시 대상에서 제외 — 이 경계가 §0의 "GitOps 리포 구조" 결정의 실체
+- 아직 `2-services/`, `3-workloads/` 실제 매니페스트가 없어서 소스 작성은 보류 — 그 작업과 함께 진행 예정
+
+---
+
+## 8. `.github/workflows/` — CI/CD
 
 - kubeval / helm-lint 등으로 매니페스트 검증
 
 ---
 
-## 8. 확장 계획
+## 9. 확장 계획
 
 1. **Windows 노트북(Core Ultra 7 255H, 32GB) 3번째 노드 조인**
    - **Hyper-V + External Switch**로 구성 (WSL2 방식은 NAT 네트워킹 한계로 제외)
@@ -164,7 +177,7 @@ Tart 설치 (brew, 1회성 수동)
 
 ---
 
-## 9. 결정 로그
+## 10. 결정 로그
 
 - VM 노드 스펙 15GB×2(총 30GB) → **14GB×2(총 28GB)로 하향 조정** (2026-09-15). 새 예산(~26~30GB) 안에 더 여유 있게 들어옴.
 - 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
@@ -178,5 +191,6 @@ Tart 설치 (brew, 1회성 수동)
 - **Pod Network CIDR을 `192.168.0.0/16` → `10.244.0.0/16`으로 변경** (2026-09-16, 1-cluster 계획 단계에서 발견). 기존 검토안이 실제 물리 LAN 대역과 겹치는 문제를 실행 전에 미리 수정.
 - **ArgoCD를 `4-tools`(추후)에서 `1-cluster` 기본 셋업으로 앞당김** (2026-09-16).
 - **ArgoCD 웹 UI: 내부 전용 HTTP + NodePort(`30080`)로 확정** (2026-09-16). TLS/외부 노출 없음 — `server.insecure: "true"`로 평문 HTTP 서빙.
+- **ArgoCD 매니페스트 리포 분리 여부: 지금은 같은 리포, 나중에 분리** (2026-09-16). `5-gitops/`를 신설해 ArgoCD `Application` CR을 두되, 실제 워크로드 소스(`2-services/`, `3-workloads/`)는 옮기지 않고 그대로 둠 — 솔로 프로젝트 규모에서 리포 분리 관리 비용이 아직 정당화 안 됨. 재사용성 필요해지거나 커밋 이력이 섞여 불편해지면 `git subtree split`으로 분리.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
 - [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
