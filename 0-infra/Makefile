@@ -40,10 +40,15 @@ $(NODES): pull
 		tart set $@ --cpu $(CPU_COUNT) --memory $(MEMORY_MB) --disk-size $(DISK_GB); \
 	fi
 
-## [1단계] node-1, node-2 NAT 모드로 생성 + 기동 (부트스트랩 전용 — tart ip가 여기서만 신뢰 가능)
+## [1단계] node-1, node-2 NAT 모드로 생성 + 기동 (부트스트랩 전용 — tart ip가 여기서만 신뢰 가능, 이미 실행 중이면 스킵)
 up: $(NODES)
-	tart run node-1 --no-graphics &
-	tart run node-2 --no-graphics &
+	@for n in $(NODES); do \
+		if tart get $$n --format json 2>/dev/null | grep -q '"Running" *: *true'; then \
+			echo "$$n 이미 실행 중 — run 스킵"; \
+		else \
+			tart run $$n --no-graphics & \
+		fi; \
+	done
 	@echo "NAT 모드로 부팅 중... 'make ip'로 확인 후 'make configure-network' 진행"
 
 ## 노드 상태 확인
@@ -84,10 +89,15 @@ configure-network-node-2:
 		sudo netplan apply' || true
 	@echo "[node-2] 정적 IP 적용 시도 완료 (netplan apply 순간 NAT 연결이 끊기는 것이 정상) — 'make down' 후 'make bridged-up'으로 진행"
 
-## [3단계] 정적 IP 적용 후: down 상태에서 bridged 모드로 재기동
+## [3단계] 정적 IP 적용 후: down 상태에서 bridged 모드로 재기동 (이미 실행 중이면 스킵)
 bridged-up:
-	tart run node-1 --net-bridged=$(NET_IFACE) --no-graphics &
-	tart run node-2 --net-bridged=$(NET_IFACE) --no-graphics &
+	@for n in $(NODES); do \
+		if tart get $$n --format json 2>/dev/null | grep -q '"Running" *: *true'; then \
+			echo "$$n 이미 실행 중 — run 스킵"; \
+		else \
+			tart run $$n --net-bridged=$(NET_IFACE) --no-graphics & \
+		fi; \
+	done
 	@echo "bridged 기동됨 — node-1=$(NODE1_IP), node-2=$(NODE2_IP) (tart ip 조회 불필요/불신뢰)"
 
 ## 1-cluster/ansible용 인벤토리 생성 — bridged+정적 IP 확정 이후엔 고정값 사용 (tart ip 조회 안 함)
