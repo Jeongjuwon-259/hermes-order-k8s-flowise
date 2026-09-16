@@ -1,0 +1,48 @@
+# 예시 파일 — 실제 앱(Flowise 등)을 배포할 때 이 파일을 복사해서
+# {project}-values.yaml로 저장 (예: flowise-values.yaml)
+# 참고: helm.sh 표준 필드는 자유롭게 확장 가능, 여기 없는 값은 각 템플릿에서 default로 처리됨
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/example/app
+  tag: latest
+  pullSecret: ""     # docker pull secret 이름 (SealedSecret으로 생성한 것)
+
+service:
+  port: 8080
+
+route:
+  enabled: true
+  hostnames:
+    - example.internal    # Gateway API HTTPRoute 호스트명
+
+destinationRule:
+  enabled: false
+  trafficPolicy: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env: []
+# env:
+#   - name: FOO
+#     value: "bar"
+
+sealedSecrets: []
+# sealedSecrets:
+#   - name: my-app-secret
+#     type: Opaque
+#     encryptedData:
+#       PASSWORD: AgBy...  # kubeseal로 암호화한 값

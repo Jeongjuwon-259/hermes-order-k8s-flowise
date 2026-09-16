@@ -23,6 +23,21 @@
   roles:
     - metallb
 
+- name: Gateway API CRD 설치
+  hosts: control_plane
+  roles:
+    - gateway-api
+
+- name: 서비스 메시 설치 (Istio, Gateway API 모드)
+  hosts: control_plane
+  roles:
+    - istio
+
+- name: 시크릿 암호화 컨트롤러 설치 (Sealed Secrets)
+  hosts: control_plane
+  roles:
+    - sealed-secrets
+
 - name: GitOps 설치 (ArgoCD)
   hosts: control_plane
   roles:

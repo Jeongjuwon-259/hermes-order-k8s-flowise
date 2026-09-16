@@ -78,9 +78,11 @@ Tart 설치 (brew, 1회성 수동)
 | CNI | Calico | Cilium은 리소스 여유 확인 후 추후 학습용 검토 |
 | LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.206~239` — DHCP(`.2~.199`)·VM 예약 구간(`.200~205`)과 모두 분리, `.240~254`는 향후용 여유 |
 | DNS | CoreDNS (기본 내장) | |
-| Ingress/Gateway | **Istio** | (2026-09-16 확정) nginx-ingress/Traefik 계획 폐기, Sub-3 프로젝트 결정과 통일. `5-gitops/`의 앱 차트 템플릿이 Gateway/VirtualService/DestinationRule을 표준으로 포함하는 구조를 전제로 함. Istio 컨트롤플레인 설치 자체는 아직 미구현(`1-cluster/ansible`에 role 추가 필요) |
+| Ingress/Gateway | **Istio (Gateway API 모드)** | (2026-09-16 확정) nginx-ingress/Traefik 계획 폐기, Sub-3 프로젝트 결정과 통일. VirtualService 대신 표준 Gateway API(HTTPRoute) 사용 — Istio가 자체 API 대신 이 표준 전환을 공식 권장(2026-09-16 확인). `roles/gateway-api`+`roles/istio` 소스 작성 완료(Helm 기반, Istio 1.31.0), Mac mini 실행은 아직 |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
 | GitOps | **ArgoCD** | 기본 셋업에 포함(1-cluster 단계에서 함께 설치) — 기존엔 `4-tools`(클러스터 안정화 이후)로 미뤄뒀으나 앞당김. 웹 UI는 내부(LAN) 전용 HTTP + NodePort(`30080`)로 접근, 외부 노출 없음 |
+| GitOps 배포 방식 | **ApplicationSet** | `5-gitops/argocd-values/app/*.yaml` 파일마다 Application 자동 생성 (Git file generator) — 수동 Application 관리 대신 |
+| 시크릿 관리 | **Sealed Secrets** | `roles/sealed-secrets` 설치, 평문 대신 `SealedSecret`만 git에 커밋. ESO/SOPS보다 외부 의존성 없어 홈랩 규모에 적합 |
 
 - kubeadm init/join, Calico/MetalLB 적용까지 전부 Ansible playbook 내에 포함 (수동 bash 명령 지양)
 
@@ -153,33 +155,41 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 7. `5-gitops/` — ArgoCD Application 정의
 
-과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 그대로 가져옴 (2026-09-16 확정):
+과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 가져오되, **2026-09-16 최신 GitOps/K8s 트렌드 검토 후 세부는 갱신**:
 
 ```
 5-gitops/
 ├── argocd-templates/
 │   └── chart/
-│       └── <stack>/                     # 예: flowise 같은 자체 개발 앱 스택
+│       └── app/                         # 자체 개발 앱(Flowise 등) 공용 차트
 │           └── stable/
+│               ├── Chart.yaml
+│               ├── values.yaml          # 기본값 (앱별 값은 argocd-values에서 override)
 │               └── templates/
 │                   ├── deployment.yaml
 │                   ├── service.yaml
 │                   ├── hpa.yaml
-│                   ├── gateway.yaml           # Istio Gateway
-│                   ├── virtual-service.yaml   # Istio VirtualService
-│                   ├── destination-rule.yaml  # Istio DestinationRule
-│                   ├── secret-docker.yaml
-│                   ├── project-secret.yaml
-│                   └── func/                  # 용도 TBD — 실제 작성 시점에 확정
-└── argocd-values/
-    └── <stack>/
-        └── {project}-values.yaml        # 예: flowise-values.yaml
+│                   ├── httproute.yaml         # Gateway API HTTPRoute (VirtualService 대체)
+│                   ├── destination-rule.yaml  # Istio 자체 CRD 유지 (세부 트래픽 정책용)
+│                   └── sealed-secret.yaml     # secret-docker.yaml/project-secret.yaml(평문) 대체
+├── argocd-values/
+│   └── app/
+│       └── example-values.yaml          # 실제 앱 만들 때 {project}-values.yaml로 복사
+└── applicationset.yaml                  # ⚠️ 초안, 미검증 — Git file generator로 argocd-values/app/*.yaml마다 Application 자동 생성
 ```
 
-- **적용 범위(가정, 실제 작성 시점에 재확인)**: 이 공유 템플릿/값 구조는 **자체 개발 앱**(Flowise 등)에 적용. Postgres/Redis/Qdrant/MinIO처럼 **업스트림 Helm 차트를 그대로 쓰는 서비스**는 이 템플릿을 거치지 않고 ArgoCD `Application`이 업스트림 차트를 직접 참조 (각자의 `values.yaml`만 우리 쪽에서 관리)
+**최신 트렌드 반영 사항** (2026-09-16 리서치 후 확정, 기존 참고 구조 대비 변경):
+1. **Gateway/VirtualService → Gateway API(HTTPRoute)**: Istio가 자체 Gateway/VirtualService API를 deprecate하고 표준 Gateway API 전환을 공식 권장. `Gateway` 리소스는 앱마다 만들지 않고 `1-cluster/ansible/roles/istio`가 1회 생성한 공유 Gateway(`istio-system/shared-gateway`)를 모든 앱의 `HTTPRoute`가 공유 (Gateway API의 역할 분리 모델: 인프라 제공자=GatewayClass, 클러스터 운영자=Gateway, 앱 개발자=HTTPRoute). `DestinationRule`은 세부 트래픽 정책 기능이 아직 Gateway API에 없어서 Istio 자체 CRD로 유지
+2. **수동 Application → ApplicationSet**: `{project}-values.yaml` 하나당 앱 하나 배포하는 구조는 ApplicationSet Git file generator에 정확히 맞음 — Application을 손으로 안 만들어도 됨
+3. **평문 secret 커밋 → Sealed Secrets**: `secret-docker.yaml`/`project-secret.yaml`을 그대로 git에 커밋하던 방식 대신, `1-cluster/ansible/roles/sealed-secrets`가 설치하는 컨트롤러로 암호화된 `SealedSecret`만 커밋 (ESO는 외부 Vault 필요, SOPS는 KMS 관리 필요해서 홈랩 규모엔 과함 — Sealed Secrets가 외부 의존성 없이 가장 단순)
+
+**적용 범위(가정, 실제 작성 시점에 재확인)**: 이 공유 템플릿/값 구조는 **자체 개발 앱**(Flowise 등)에 적용. Postgres/Redis/Qdrant/MinIO처럼 **업스트림 Helm 차트를 그대로 쓰는 서비스**는 이 템플릿을 거치지 않고 ArgoCD `Application`이 업스트림 차트를 직접 참조 (각자의 `values.yaml`만 우리 쪽에서 관리)
+
 - ArgoCD가 실제로 감시(sync)하는 대상은 이 디렉토리 — `0-infra/`, `1-cluster/`(인프라 프로비저닝 코드)는 감시 대상에서 제외
-- Ingress/Gateway는 Istio로 확정(§3 참고)되어 차트 템플릿에 Gateway/VirtualService/DestinationRule이 표준으로 포함됨
-- 아직 `2-services/`, `3-workloads/` 실제 매니페스트가 없어서 소스 작성은 보류 — 그 작업과 함께 진행 예정
+- 차트는 로컬에서 `helm lint`/`helm template`로 문법 검증 완료 (실제 클러스터 배포는 미검증)
+- `applicationset.yaml`은 실기 검증 전까지 신뢰하지 말 것 — ArgoCD 버전별로 Git file generator 템플릿 문법이 다를 수 있음
+- 아직 `2-services/`, `3-workloads/` 실제 매니페스트가 없어서 실제 앱 값 파일 작성은 보류 — 그 작업과 함께 진행 예정
+- 과거 참고 구조의 `func/` 디렉토리는 용도가 불명확해서 이번엔 생성하지 않음 (Helm이 `templates/` 아래 비-YAML 파일을 만나면 렌더링 에러가 나서, 필요해지면 실제 내용과 함께 추가할 것)
 
 ---
 
@@ -216,7 +226,9 @@ Tart 설치 (brew, 1회성 수동)
 - **ArgoCD 웹 UI: 내부 전용 HTTP + NodePort(`30080`)로 확정** (2026-09-16). TLS/외부 노출 없음 — `server.insecure: "true"`로 평문 HTTP 서빙.
 - **ArgoCD 매니페스트 리포 분리 여부: 지금은 같은 리포, 나중에 분리** (2026-09-16). `5-gitops/`를 신설해 ArgoCD `Application` CR을 두되, 실제 워크로드 소스(`2-services/`, `3-workloads/`)는 옮기지 않고 그대로 둠 — 솔로 프로젝트 규모에서 리포 분리 관리 비용이 아직 정당화 안 됨. 재사용성 필요해지거나 커밋 이력이 섞여 불편해지면 `git subtree split`으로 분리.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
-- **Ingress/Gateway: Istio로 통일 확정** (2026-09-16). hermes의 nginx-ingress/Traefik 검토안 폐기, Sub-3 결정과 일치시킴. `5-gitops/` 앱 차트 템플릿에 Gateway/VirtualService/DestinationRule을 표준 포함.
+- **Ingress/Gateway: Istio로 통일 확정** (2026-09-16). hermes의 nginx-ingress/Traefik 검토안 폐기, Sub-3 결정과 일치시킴.
 - **`5-gitops/` 구조를 `argocd-templates`(공유 차트) + `argocd-values`(앱별 값) 2단 구조로 확정** (2026-09-16). 과거 프로젝트 패턴 재사용. 업스트림 Helm 차트를 쓰는 서비스(Postgres 등)는 이 구조를 거치지 않고 ArgoCD가 직접 참조.
-- [ ] Istio 컨트롤플레인 설치(`1-cluster/ansible`에 role 추가 필요) — 아직 미구현, Gateway/VirtualService는 이게 있어야 동작
-- [ ] `5-gitops/argocd-templates`의 `func/` 디렉토리 용도 확정 필요 (실제 작성 시점)
+- **최신 K8s/GitOps 트렌드 검토 후 3가지 반영, 소스 작성 완료** (2026-09-16): (1) Istio VirtualService → 표준 Gateway API(HTTPRoute), Istio가 공식 권장 전환 (2) 수동 ArgoCD Application → ApplicationSet(Git file generator), `argocd-values`의 파일당-앱 구조에 자연스럽게 맞음 (3) 평문 secret 커밋 → Sealed Secrets, ESO/SOPS 대비 외부 의존성 없어 홈랩 규모에 적합. `1-cluster/ansible`에 `roles/gateway-api`(Gateway API CRD v1.6.2), `roles/istio`(Helm 기반, 1.31.0, 공유 Gateway 1회 생성), `roles/sealed-secrets` 추가, `5-gitops/argocd-templates/chart/app/stable` 차트 작성(로컬 `helm lint`/`helm template` 통과), `5-gitops/applicationset.yaml`(초안, 미검증).
+- [ ] Istio/Gateway API/Sealed Secrets/ApplicationSet — 전부 소스만 작성됨, **Mac mini에서 `ansible-playbook` 실행 검증 아직 안 함**
+- [ ] `applicationset.yaml`은 실제 앱 값 파일 추가 후 sync 확인 전까지 미신뢰 상태로 취급
+- [ ] `5-gitops/argocd-templates`의 `func/` — 용도 불명확해서 생성 안 함, 실제 필요해지면 내용과 함께 추가

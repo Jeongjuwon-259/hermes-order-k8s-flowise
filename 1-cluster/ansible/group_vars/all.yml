@@ -17,4 +17,8 @@ argocd_version: "stable"           # ArgoCD 공식 권장 설치 채널(stable �
 metallb_ip_range: "192.168.0.206-192.168.0.239"   # .200~.205는 VM 전용 예약, .240~.254는 향후용 여유
 argocd_nodeport: 30080             # 웹 UI HTTP 접근용, 내부(LAN) 전용
 
+gateway_api_version: "v1.6.2"      # kubernetes-sigs/gateway-api, standard channel
+istio_version: "1.31.0"            # Helm 차트 버전(app version과 동일 태그 사용)
+# sealed-secrets는 helm repo 최신을 그대로 사용 (버전 미고정 — 컨트롤러라 앱처럼 자주 안 바뀜)
+
 control_plane_host: node-1

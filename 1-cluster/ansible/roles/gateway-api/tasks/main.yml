@@ -1,0 +1,12 @@
+---
+# roles/gateway-api — Kubernetes Gateway API CRD 설치
+# Istio가 자체 Gateway/VirtualService API를 deprecate하고 이 표준 API로 전환 권장 중(2026-09-16 확인)
+# roles/istio보다 먼저 실행되어야 함 (istiod가 Gateway API CRD 존재를 전제로 컨트롤러 등록)
+
+- name: Gateway API CRD 적용 (standard channel)
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ gateway_api_version }}/standard-install.yaml
+  when: inventory_hostname in groups['control_plane']
+  register: gwapi_apply
+  changed_when: "'unchanged' not in gwapi_apply.stdout"

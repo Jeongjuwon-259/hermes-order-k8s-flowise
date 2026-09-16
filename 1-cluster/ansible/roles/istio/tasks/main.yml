@@ -1,0 +1,82 @@
+---
+# roles/istio — Istio 서비스 메시 설치, Gateway API 모드 (VirtualService 대신 HTTPRoute 사용)
+# 전제: roles/gateway-api가 먼저 실행되어 Gateway API CRD가 존재해야 함
+# 설계 배경: gateway/virtual-service 대신 표준 Gateway API로 간 이유는 README.md §3, §10 결정 로그 참고.
+# Gateway API 모델에서는 Gateway 리소스 하나가 곧 실제 프록시를 자동 프로비저닝하므로
+# (인프라 제공자=GatewayClass, 클러스터 운영자=Gateway, 앱 개발자=HTTPRoute 역할 분리),
+# "공유 Gateway"는 여기서 1회 생성 — 개별 앱은 HTTPRoute만 만들면 됨(5-gitops 차트 템플릿).
+
+- name: Helm CLI 설치 여부 확인
+  ansible.builtin.command: which helm
+  register: helm_check
+  failed_when: false
+  changed_when: false
+  when: inventory_hostname in groups['control_plane']
+
+- name: Helm CLI 설치 (미설치 시)
+  ansible.builtin.shell: |
+    curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+    chmod +x /tmp/get_helm.sh
+    /tmp/get_helm.sh
+  when:
+    - inventory_hostname in groups['control_plane']
+    - helm_check.rc != 0
+
+- name: Istio Helm 저장소 등록
+  ansible.builtin.command: helm repo add istio https://istio-release.storage.googleapis.com/charts
+  when: inventory_hostname in groups['control_plane']
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when:
+    - helm_repo_add.rc != 0
+    - "'already exists' not in helm_repo_add.stderr"
+
+- name: Helm 저장소 갱신
+  ansible.builtin.command: helm repo update
+  when: inventory_hostname in groups['control_plane']
+  changed_when: false
+
+- name: istio-system 네임스페이스 생성
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf create namespace istio-system
+  when: inventory_hostname in groups['control_plane']
+  register: istio_ns
+  failed_when:
+    - istio_ns.rc != 0
+    - "'AlreadyExists' not in istio_ns.stderr"
+  changed_when: istio_ns.rc == 0
+
+- name: istio-base(CRD) 설치
+  ansible.builtin.command: >
+    helm upgrade --install istio-base istio/base
+    -n istio-system --version {{ istio_version }}
+    --kubeconfig /etc/kubernetes/admin.conf
+  when: inventory_hostname in groups['control_plane']
+  register: istio_base_install
+  changed_when: "'has been upgraded' in istio_base_install.stdout or 'has been installed' in istio_base_install.stdout"
+
+- name: istiod(컨트롤플레인) 설치 — Gateway API 자동 관리 활성화
+  ansible.builtin.command: >
+    helm upgrade --install istiod istio/istiod
+    -n istio-system --version {{ istio_version }}
+    --kubeconfig /etc/kubernetes/admin.conf
+    --set pilot.env.PILOT_ENABLE_GATEWAY_API=true
+    --set pilot.env.PILOT_ENABLE_GATEWAY_API_DEPLOYMENT_CONTROLLER=true
+    --wait
+  when: inventory_hostname in groups['control_plane']
+  register: istiod_install
+  changed_when: "'has been upgraded' in istiod_install.stdout or 'has been installed' in istiod_install.stdout"
+
+- name: 공유 Gateway 리소스 렌더링
+  ansible.builtin.template:
+    src: gateway.yaml.j2
+    dest: /tmp/istio-gateway.yaml
+    mode: "0644"
+  when: inventory_hostname in groups['control_plane']
+
+- name: 공유 Gateway 리소스 적용 (istiod가 실제 프록시 자동 프로비저닝, MetalLB가 External-IP 할당)
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /tmp/istio-gateway.yaml
+  when: inventory_hostname in groups['control_plane']
+  register: gateway_apply
+  changed_when: "'unchanged' not in gateway_apply.stdout"

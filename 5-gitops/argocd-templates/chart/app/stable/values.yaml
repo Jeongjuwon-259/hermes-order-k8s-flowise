@@ -1,0 +1,30 @@
+# 차트 기본값 — 실제 배포 시 argocd-values/app/{project}-values.yaml로 override됨
+replicaCount: 1
+
+image:
+  repository: ""
+  tag: latest
+  pullSecret: ""
+
+service:
+  port: 8080
+
+route:
+  enabled: false
+  hostnames: []
+
+destinationRule:
+  enabled: false
+  trafficPolicy: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+resources: {}
+
+env: []
+
+sealedSecrets: []
