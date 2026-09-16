@@ -60,7 +60,7 @@ Tart 설치 (brew, 1회성 수동)
   - 노드 정적 IP: `node-1 = 192.168.0.201`, `node-2 = 192.168.0.202`
   - 라우터 DHCP 대여 범위를 `192.168.0.2~199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 구간으로 확보
   - 외부 접근은 포트포워딩 대신 Tailscale/WireGuard VPN 권장
-- **파일**: `Makefile`(`pull`/`up`/`configure-network`/`bridged-up`/`down`/`status`/`ip`/`inventory`/`clean` 타깃), `netplan/node-1.yaml`·`netplan/node-2.yaml`(정적 IP 설정, 게스트 인터페이스명은 최초 부팅 후 `ip a`로 확인 필요), Ansible `inventory/hosts.ini`(`make inventory`가 고정 IP 기준으로 생성), `playbook.yml`
+- **파일**: `Makefile`(`pull`/`up`/`fix-identity`/`configure-network`/`bridged-up`/`down`/`status`/`ip`/`verify`/`inventory`/`clean`/`bootstrap`(전체 자동화) 타깃, 게스트 인터페이스명·netplan 내용은 SSH로 부팅 후 자동 감지해 인라인 생성), `TROUBLESHOOTING_NOTES.md`(해결된 이슈 + 재발 방지 힌트), Ansible `inventory/hosts.ini`(`make inventory`가 고정 IP 기준으로 생성), `playbook.yml`
 
 ---
 
@@ -172,6 +172,6 @@ Tart 설치 (brew, 1회성 수동)
 - 라우터(ipTIME BE3600QCA) DHCP 범위를 `.2~.199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 확보 (2026-09-16).
 - MetalLB IP 풀을 `.200~210` → **`.210~220`으로 이동** (2026-09-16). 노드 정적 IP(.201/.202)와의 충돌 회피.
 - **NAT→static→bridged 전환을 0-infra/Makefile에서 직접 구현** (2026-09-16). Ansible에 위임하지 않고 `configure-network`/`bridged-up` 타깃으로 0-infra 단계에서 완결 — kubeadm이 시작되기 전에 노드 IP가 이미 고정이어야 하므로. Tart 공식 이미지 기본 계정(`admin`/`admin`)으로 SSH 자동화, `sshpass` 필요.
+- **clone된 VM의 machine-id 중복이 node-2 bridged 무응답의 근본 원인으로 확정, 수정 완료** (2026-09-16). `fix-identity` 타깃(`cloud-init clean --machine-id` + reboot)을 `up`과 `configure-network` 사이에 추가. Mac mini에서 `make clean && make bootstrap`으로 재검증 완료 — **0-infra는 이제 end-to-end로 완전히 검증됨**. 상세는 `0-infra/TROUBLESHOOTING_NOTES.md`.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
 - [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
-- [ ] **미검증 항목** (Mac mini 실기 확인 필요): 게스트 인터페이스명(`enp0s1` 가정), macOS 브리지 인터페이스(`en0` 가정), admin 계정 NOPASSWD sudo 여부, netplan apply 도중 SSH 세션이 끊겨도 원격 명령이 끝까지 실행되는지
