@@ -78,7 +78,7 @@ Tart 설치 (brew, 1회성 수동)
 | CNI | Calico | Cilium은 리소스 여유 확인 후 추후 학습용 검토 |
 | LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.206~239` — DHCP(`.2~.199`)·VM 예약 구간(`.200~205`)과 모두 분리, `.240~254`는 향후용 여유 |
 | DNS | CoreDNS (기본 내장) | |
-| Ingress | nginx-ingress 또는 Traefik | Istio는 sidecar 오버헤드로 1단계에서 제외, 추후 학습용으로 별도 도입 — ⚠️ 단, 같은 클러스터를 쓰는 Sub-3 러닝 프로젝트 쪽에서 외부 노출용 Gateway로 Istio를 채택(구현은 후순위)하기로 해서, 두 결정이 어긋남. 실제 Ingress 구현 시점에 재확인 필요 |
+| Ingress/Gateway | **Istio** | (2026-09-16 확정) nginx-ingress/Traefik 계획 폐기, Sub-3 프로젝트 결정과 통일. `5-gitops/`의 앱 차트 템플릿이 Gateway/VirtualService/DestinationRule을 표준으로 포함하는 구조를 전제로 함. Istio 컨트롤플레인 설치 자체는 아직 미구현(`1-cluster/ansible`에 role 추가 필요) |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
 | GitOps | **ArgoCD** | 기본 셋업에 포함(1-cluster 단계에서 함께 설치) — 기존엔 `4-tools`(클러스터 안정화 이후)로 미뤄뒀으나 앞당김. 웹 UI는 내부(LAN) 전용 HTTP + NodePort(`30080`)로 접근, 외부 노출 없음 |
 
@@ -153,9 +153,32 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 7. `5-gitops/` — ArgoCD Application 정의
 
-- ArgoCD가 실제로 감시(sync)하는 대상 — `Application`(필요 시 App-of-Apps 패턴의 root Application) CR을 여기 둠
-- 각 `Application.spec.source.path`는 같은 리포의 `2-services/`, `3-workloads/` 하위 경로를 가리킴 — 매니페스트 원본은 옮기지 않고 그대로 둠
-- `0-infra/`, `1-cluster/`(인프라 프로비저닝 코드)는 ArgoCD 감시 대상에서 제외 — 이 경계가 §0의 "GitOps 리포 구조" 결정의 실체
+과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 그대로 가져옴 (2026-09-16 확정):
+
+```
+5-gitops/
+├── argocd-templates/
+│   └── chart/
+│       └── <stack>/                     # 예: flowise 같은 자체 개발 앱 스택
+│           └── stable/
+│               └── templates/
+│                   ├── deployment.yaml
+│                   ├── service.yaml
+│                   ├── hpa.yaml
+│                   ├── gateway.yaml           # Istio Gateway
+│                   ├── virtual-service.yaml   # Istio VirtualService
+│                   ├── destination-rule.yaml  # Istio DestinationRule
+│                   ├── secret-docker.yaml
+│                   ├── project-secret.yaml
+│                   └── func/                  # 용도 TBD — 실제 작성 시점에 확정
+└── argocd-values/
+    └── <stack>/
+        └── {project}-values.yaml        # 예: flowise-values.yaml
+```
+
+- **적용 범위(가정, 실제 작성 시점에 재확인)**: 이 공유 템플릿/값 구조는 **자체 개발 앱**(Flowise 등)에 적용. Postgres/Redis/Qdrant/MinIO처럼 **업스트림 Helm 차트를 그대로 쓰는 서비스**는 이 템플릿을 거치지 않고 ArgoCD `Application`이 업스트림 차트를 직접 참조 (각자의 `values.yaml`만 우리 쪽에서 관리)
+- ArgoCD가 실제로 감시(sync)하는 대상은 이 디렉토리 — `0-infra/`, `1-cluster/`(인프라 프로비저닝 코드)는 감시 대상에서 제외
+- Ingress/Gateway는 Istio로 확정(§3 참고)되어 차트 템플릿에 Gateway/VirtualService/DestinationRule이 표준으로 포함됨
 - 아직 `2-services/`, `3-workloads/` 실제 매니페스트가 없어서 소스 작성은 보류 — 그 작업과 함께 진행 예정
 
 ---
@@ -193,4 +216,7 @@ Tart 설치 (brew, 1회성 수동)
 - **ArgoCD 웹 UI: 내부 전용 HTTP + NodePort(`30080`)로 확정** (2026-09-16). TLS/외부 노출 없음 — `server.insecure: "true"`로 평문 HTTP 서빙.
 - **ArgoCD 매니페스트 리포 분리 여부: 지금은 같은 리포, 나중에 분리** (2026-09-16). `5-gitops/`를 신설해 ArgoCD `Application` CR을 두되, 실제 워크로드 소스(`2-services/`, `3-workloads/`)는 옮기지 않고 그대로 둠 — 솔로 프로젝트 규모에서 리포 분리 관리 비용이 아직 정당화 안 됨. 재사용성 필요해지거나 커밋 이력이 섞여 불편해지면 `git subtree split`으로 분리.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
-- [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
+- **Ingress/Gateway: Istio로 통일 확정** (2026-09-16). hermes의 nginx-ingress/Traefik 검토안 폐기, Sub-3 결정과 일치시킴. `5-gitops/` 앱 차트 템플릿에 Gateway/VirtualService/DestinationRule을 표준 포함.
+- **`5-gitops/` 구조를 `argocd-templates`(공유 차트) + `argocd-values`(앱별 값) 2단 구조로 확정** (2026-09-16). 과거 프로젝트 패턴 재사용. 업스트림 Helm 차트를 쓰는 서비스(Postgres 등)는 이 구조를 거치지 않고 ArgoCD가 직접 참조.
+- [ ] Istio 컨트롤플레인 설치(`1-cluster/ansible`에 role 추가 필요) — 아직 미구현, Gateway/VirtualService는 이게 있어야 동작
+- [ ] `5-gitops/argocd-templates`의 `func/` 디렉토리 용도 확정 필요 (실제 작성 시점)
