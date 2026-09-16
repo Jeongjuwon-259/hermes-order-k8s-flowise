@@ -14,7 +14,7 @@ calico_version: "v3.32.2"
 metallb_version: "v0.16.1"
 argocd_version: "stable"           # ArgoCD 공식 권장 설치 채널(stable 브랜치 매니페스트)
 
-metallb_ip_range: "192.168.0.210-192.168.0.220"
+metallb_ip_range: "192.168.0.206-192.168.0.254"   # .200~.205는 VM 전용 예약, 나머지 전부 풀에 배정
 argocd_nodeport: 30080             # 웹 UI HTTP 접근용, 내부(LAN) 전용
 
 control_plane_host: node-1

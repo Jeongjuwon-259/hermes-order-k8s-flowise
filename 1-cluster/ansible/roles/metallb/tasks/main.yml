@@ -1,5 +1,5 @@
 ---
-# roles/metallb — L2 모드, IP 풀 192.168.0.210~220 (README.md §3/§9 참고, DHCP·노드 정적 IP와 분리)
+# roles/metallb — L2 모드, IP 풀 192.168.0.206~254 (README.md §3/§9 참고, DHCP·VM 예약 구간(.200~205)과 분리)
 
 - name: MetalLB 매니페스트 적용
   ansible.builtin.command: >
