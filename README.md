@@ -2,6 +2,8 @@
 
 Mac mini M4(64GB) 로컬 LLM 환경 위에 얹는 개인용 kubeadm 클러스터. Qdrant(벡터 DB) + Flowise(에이전트 워크플로우 빌더)를 상시 운영하며, Hermes Agent 자동화의 인프라 기반이 된다.
 
+> 같은 `node-1`/`node-2` 클러스터를 **Sub-3 러닝 데이터 인프라 프로젝트**(SQLite + AWS S3 + Garmin MCP)와 공유한다. 해당 프로젝트의 설계/작업 로그는 Obsidian `AI러닝` 볼트에서 관리하며, 이 저장소에는 공유 인프라(0-infra/1-cluster) 소스만 함께 반영한다.
+
 ---
 
 ## 0. 전체 흐름
@@ -51,9 +53,12 @@ Tart 설치 (brew, 1회성 수동)
 - **VM 사양**: node-1(control-plane) 14GB/4vCPU, node-2(worker) 14GB/4vCPU, 디스크 170GB
 - **OS**: Ubuntu Server 24.04 LTS — Tart 공식 레지스트리에 Rocky Linux 사전 빌드 이미지가 없어 채택 (Rocky 선호는 유지되나 인프라 제약상 Ubuntu로 결정)
 - **VM 이미지/디스크 저장 위치**: `TART_HOME=/Users/blue/iac-project` (기본 `~/.tart` 대신 지정)
-- **네트워크(iptime 게이트웨이 기준)**:
-  - VM은 브리지 모드로 iptime 서브넷에서 직접 IP 수령
-  - 각 노드 고정 IP 예약(MAC 기준) — kubeadm 인증서 SAN/etcd 피어링 안정성 확보
+- **네트워크(iptime BE3600QCA 게이트웨이 기준, `192.168.0.0/24`)**:
+  - VM은 브리지 모드(`--net-bridged`)로 iptime 서브넷에서 직접 IP 수령
+  - **`tart ip`/ARP 리졸버는 bridged+Ubuntu Server 게스트 조합에서 공식적으로 미해결 버그**([cirruslabs/tart#460](https://github.com/cirruslabs/tart/issues/460), "not possible at the moment") — IP 자동조회에 의존하지 않고 **게스트 OS(netplan) 안에 정적 IP를 직접 박는 방식**으로 확정
+  - 부트스트랩 2단계: ① 최초엔 NAT 모드로 기동해 `tart ip`(정상 동작)로 접속 → ② netplan static IP 설정 + 이후부턴 `--net-bridged`로 기동 전환 (Ansible 초기 태스크로 처리 예정, `1-cluster/` 단계에서 구현)
+  - 노드 정적 IP: `node-1 = 192.168.0.201`, `node-2 = 192.168.0.202`
+  - 라우터 DHCP 대여 범위를 `192.168.0.2~199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 구간으로 확보
   - 외부 접근은 포트포워딩 대신 Tailscale/WireGuard VPN 권장
 - **파일**: `Makefile`(`pull`/`up`/`down`/`status`/`ip`/`inventory`/`clean` 타깃, `tart clone`→`tart set`→`tart run`을 순서대로 호출), Ansible `inventory/hosts.ini`(`make inventory`가 생성), `playbook.yml`
 
@@ -66,9 +71,9 @@ Tart 설치 (brew, 1회성 수동)
 | 컨테이너 런타임 | containerd | kubeadm 표준 |
 | 클러스터 구성 | kubeadm 2노드 (control-plane + worker) | control-plane taint 제거하여 워크로드 동시 수용 |
 | CNI | Calico | Cilium은 리소스 여유 확인 후 추후 학습용 검토 |
-| LoadBalancer | MetalLB (L2 모드) | IP 풀은 iptime DHCP 대역과 반드시 분리 (예: DHCP `.100~.199` / MetalLB `.200~.210`) |
+| LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.210~220` — DHCP(`.2~.199`)·노드 정적 IP(`.201`,`.202`)와 모두 분리 |
 | DNS | CoreDNS (기본 내장) | |
-| Ingress | nginx-ingress 또는 Traefik | Istio는 sidecar 오버헤드로 1단계에서 제외, 추후 학습용으로 별도 도입 |
+| Ingress | nginx-ingress 또는 Traefik | Istio는 sidecar 오버헤드로 1단계에서 제외, 추후 학습용으로 별도 도입 — ⚠️ 단, 같은 클러스터를 쓰는 Sub-3 러닝 프로젝트 쪽에서 외부 노출용 Gateway로 Istio를 채택(구현은 후순위)하기로 해서, 두 결정이 어긋남. 실제 Ingress 구현 시점에 재확인 필요 |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
 
 - kubeadm init/join, Calico/MetalLB 적용까지 전부 Ansible playbook 내에 포함 (수동 bash 명령 지양)
@@ -163,4 +168,8 @@ Tart 설치 (brew, 1회성 수동)
 - 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
 - Tart VM 이미지/디스크 저장 위치를 `TART_HOME=/Users/blue/iac-project`로 지정 (2026-09-15). 기본값 `~/.tart` 대신 사용.
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
+- **VM 네트워킹: bridged + 게스트 정적 IP로 확정** (2026-09-16). `tart ip`가 bridged+Ubuntu Server 조합에서 공식 미해결 버그([tart#460](https://github.com/cirruslabs/tart/issues/460))라 자동 IP조회 대신 netplan 정적 IP 채택. node-1=`192.168.0.201`, node-2=`192.168.0.202`. 부트스트랩은 NAT로, 이후 Ansible이 static+bridged로 전환.
+- 라우터(ipTIME BE3600QCA) DHCP 범위를 `.2~.199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 확보 (2026-09-16).
+- MetalLB IP 풀을 `.200~210` → **`.210~220`으로 이동** (2026-09-16). 노드 정적 IP(.201/.202)와의 충돌 회피.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
+- [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
