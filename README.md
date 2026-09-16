@@ -76,7 +76,7 @@ Tart 설치 (brew, 1회성 수동)
 | DNS | CoreDNS (기본 내장) | |
 | Ingress | nginx-ingress 또는 Traefik | Istio는 sidecar 오버헤드로 1단계에서 제외, 추후 학습용으로 별도 도입 — ⚠️ 단, 같은 클러스터를 쓰는 Sub-3 러닝 프로젝트 쪽에서 외부 노출용 Gateway로 Istio를 채택(구현은 후순위)하기로 해서, 두 결정이 어긋남. 실제 Ingress 구현 시점에 재확인 필요 |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
-| GitOps | **ArgoCD** | 기본 셋업에 포함(1-cluster 단계에서 함께 설치) — 기존엔 `4-tools`(클러스터 안정화 이후)로 미뤄뒀으나 앞당김 |
+| GitOps | **ArgoCD** | 기본 셋업에 포함(1-cluster 단계에서 함께 설치) — 기존엔 `4-tools`(클러스터 안정화 이후)로 미뤄뒀으나 앞당김. 웹 UI는 내부(LAN) 전용 HTTP + NodePort(`30080`)로 접근, 외부 노출 없음 |
 
 - kubeadm init/join, Calico/MetalLB 적용까지 전부 Ansible playbook 내에 포함 (수동 bash 명령 지양)
 
@@ -177,5 +177,6 @@ Tart 설치 (brew, 1회성 수동)
 - **clone된 VM의 machine-id 중복이 node-2 bridged 무응답의 근본 원인으로 확정, 수정 완료** (2026-09-16). `fix-identity` 타깃(`cloud-init clean --machine-id` + reboot)을 `up`과 `configure-network` 사이에 추가. Mac mini에서 `make clean && make bootstrap`으로 재검증 완료 — **0-infra는 이제 end-to-end로 완전히 검증됨**. 상세는 `0-infra/TROUBLESHOOTING_NOTES.md`.
 - **Pod Network CIDR을 `192.168.0.0/16` → `10.244.0.0/16`으로 변경** (2026-09-16, 1-cluster 계획 단계에서 발견). 기존 검토안이 실제 물리 LAN 대역과 겹치는 문제를 실행 전에 미리 수정.
 - **ArgoCD를 `4-tools`(추후)에서 `1-cluster` 기본 셋업으로 앞당김** (2026-09-16).
+- **ArgoCD 웹 UI: 내부 전용 HTTP + NodePort(`30080`)로 확정** (2026-09-16). TLS/외부 노출 없음 — `server.insecure: "true"`로 평문 HTTP 서빙.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
 - [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
