@@ -70,11 +70,13 @@ Tart 설치 (brew, 1회성 수동)
 |---|---|---|
 | 컨테이너 런타임 | containerd | kubeadm 표준 |
 | 클러스터 구성 | kubeadm 2노드 (control-plane + worker) | control-plane taint 제거하여 워크로드 동시 수용 |
+| Pod Network CIDR | `10.244.0.0/16` | 기존 검토안(`192.168.0.0/16`)이 실제 물리 LAN 대역(`192.168.0.0/24`, 노드/MetalLB 풀 포함)과 정확히 겹쳐서 변경. kubeadm 기본 Service CIDR(`10.96.0.0/12`)과도 안 겹침 |
 | CNI | Calico | Cilium은 리소스 여유 확인 후 추후 학습용 검토 |
 | LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.210~220` — DHCP(`.2~.199`)·노드 정적 IP(`.201`,`.202`)와 모두 분리 |
 | DNS | CoreDNS (기본 내장) | |
 | Ingress | nginx-ingress 또는 Traefik | Istio는 sidecar 오버헤드로 1단계에서 제외, 추후 학습용으로 별도 도입 — ⚠️ 단, 같은 클러스터를 쓰는 Sub-3 러닝 프로젝트 쪽에서 외부 노출용 Gateway로 Istio를 채택(구현은 후순위)하기로 해서, 두 결정이 어긋남. 실제 Ingress 구현 시점에 재확인 필요 |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
+| GitOps | **ArgoCD** | 기본 셋업에 포함(1-cluster 단계에서 함께 설치) — 기존엔 `4-tools`(클러스터 안정화 이후)로 미뤄뒀으나 앞당김 |
 
 - kubeadm init/join, Calico/MetalLB 적용까지 전부 Ansible playbook 내에 포함 (수동 bash 명령 지양)
 
@@ -141,7 +143,7 @@ Tart 설치 (brew, 1회성 수동)
 ## 6. `4-tools/` — 관측성 (추후 도입)
 
 - Prometheus/Grafana, Jaeger 등은 클러스터 안정화 이후 단계적으로 추가
-- ArgoCD(GitOps)도 이 단계에서 함께 검토
+- ArgoCD(GitOps)는 `1-cluster` 기본 셋업으로 앞당겨져 여기서 제외됨 (§3 참고)
 
 ---
 
@@ -173,5 +175,7 @@ Tart 설치 (brew, 1회성 수동)
 - MetalLB IP 풀을 `.200~210` → **`.210~220`으로 이동** (2026-09-16). 노드 정적 IP(.201/.202)와의 충돌 회피.
 - **NAT→static→bridged 전환을 0-infra/Makefile에서 직접 구현** (2026-09-16). Ansible에 위임하지 않고 `configure-network`/`bridged-up` 타깃으로 0-infra 단계에서 완결 — kubeadm이 시작되기 전에 노드 IP가 이미 고정이어야 하므로. Tart 공식 이미지 기본 계정(`admin`/`admin`)으로 SSH 자동화, `sshpass` 필요.
 - **clone된 VM의 machine-id 중복이 node-2 bridged 무응답의 근본 원인으로 확정, 수정 완료** (2026-09-16). `fix-identity` 타깃(`cloud-init clean --machine-id` + reboot)을 `up`과 `configure-network` 사이에 추가. Mac mini에서 `make clean && make bootstrap`으로 재검증 완료 — **0-infra는 이제 end-to-end로 완전히 검증됨**. 상세는 `0-infra/TROUBLESHOOTING_NOTES.md`.
+- **Pod Network CIDR을 `192.168.0.0/16` → `10.244.0.0/16`으로 변경** (2026-09-16, 1-cluster 계획 단계에서 발견). 기존 검토안이 실제 물리 LAN 대역과 겹치는 문제를 실행 전에 미리 수정.
+- **ArgoCD를 `4-tools`(추후)에서 `1-cluster` 기본 셋업으로 앞당김** (2026-09-16).
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
 - [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
