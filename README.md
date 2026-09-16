@@ -58,7 +58,7 @@ Tart 설치 (brew, 1회성 수동)
   - **`tart ip`/ARP 리졸버는 bridged+Ubuntu Server 게스트 조합에서 공식적으로 미해결 버그**([cirruslabs/tart#460](https://github.com/cirruslabs/tart/issues/460), "not possible at the moment") — IP 자동조회에 의존하지 않고 **게스트 OS(netplan) 안에 정적 IP를 직접 박는 방식**으로 확정
   - 부트스트랩 3단계, **전부 0-infra/Makefile에서 처리** (Ansible 불필요): ① `make up` — NAT 모드로 최초 기동, `tart ip` 정상 동작 ② `make configure-network` — NAT IP로 SSH 접속해 게스트에 netplan 정적 IP 주입(cloud-init의 network 관리는 비활성화) ③ `make down` 후 `make bridged-up` — `--net-bridged`로 재기동, 이후 IP는 항상 고정값
   - 노드 정적 IP: `node-1 = 192.168.0.201`, `node-2 = 192.168.0.202` (VM 예약 구간 `.200~.205` 안에서 배정, Windows 3번째 노드 등 향후 확장 여유분 `.203~.205` 포함)
-  - 라우터 DHCP 대여 범위를 `192.168.0.2~199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 구간으로 확보 — 그중 `.200~.205`는 VM 전용, `.206~.254`는 MetalLB IP 풀
+  - 라우터 DHCP 대여 범위를 `192.168.0.2~199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 구간으로 확보 — `.200~.205`는 VM 전용, `.206~.239`는 MetalLB IP 풀, `.240~.254`는 향후용 여유
   - 외부 접근은 포트포워딩 대신 Tailscale/WireGuard VPN 권장
 - **파일**: `Makefile`(`pull`/`up`/`fix-identity`/`configure-network`/`bridged-up`/`down`/`status`/`ip`/`verify`/`inventory`/`clean`/`bootstrap`(전체 자동화) 타깃, 게스트 인터페이스명·netplan 내용은 SSH로 부팅 후 자동 감지해 인라인 생성), `TROUBLESHOOTING_NOTES.md`(해결된 이슈 + 재발 방지 힌트), Ansible `inventory/hosts.ini`(`make inventory`가 고정 IP 기준으로 생성), `playbook.yml`
 
@@ -72,7 +72,7 @@ Tart 설치 (brew, 1회성 수동)
 | 클러스터 구성 | kubeadm 2노드 (control-plane + worker) | control-plane taint 제거하여 워크로드 동시 수용 |
 | Pod Network CIDR | `10.244.0.0/16` | 기존 검토안(`192.168.0.0/16`)이 실제 물리 LAN 대역(`192.168.0.0/24`, 노드/MetalLB 풀 포함)과 정확히 겹쳐서 변경. kubeadm 기본 Service CIDR(`10.96.0.0/12`)과도 안 겹침 |
 | CNI | Calico | Cilium은 리소스 여유 확인 후 추후 학습용 검토 |
-| LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.206~254` — DHCP(`.2~.199`)·VM 예약 구간(`.200~205`)과 모두 분리 |
+| LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.206~239` — DHCP(`.2~.199`)·VM 예약 구간(`.200~205`)과 모두 분리, `.240~254`는 향후용 여유 |
 | DNS | CoreDNS (기본 내장) | |
 | Ingress | nginx-ingress 또는 Traefik | Istio는 sidecar 오버헤드로 1단계에서 제외, 추후 학습용으로 별도 도입 — ⚠️ 단, 같은 클러스터를 쓰는 Sub-3 러닝 프로젝트 쪽에서 외부 노출용 Gateway로 Istio를 채택(구현은 후순위)하기로 해서, 두 결정이 어긋남. 실제 Ingress 구현 시점에 재확인 필요 |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
@@ -172,7 +172,7 @@ Tart 설치 (brew, 1회성 수동)
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
 - **VM 네트워킹: bridged + 게스트 정적 IP로 확정** (2026-09-16). `tart ip`가 bridged+Ubuntu Server 조합에서 공식 미해결 버그([tart#460](https://github.com/cirruslabs/tart/issues/460))라 자동 IP조회 대신 netplan 정적 IP 채택. node-1=`192.168.0.201`, node-2=`192.168.0.202`.
 - 라우터(ipTIME BE3600QCA) DHCP 범위를 `.2~.199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 확보 (2026-09-16).
-- MetalLB IP 풀을 `.200~210` → `.210~220` → **`.206~254`로 확장** (2026-09-16). `.200~205`만 VM 전용으로 남기고, 나머지 고정 IP 구간 전체를 풀에 배정 — 기존 풀(11개)이 너무 작다고 판단.
+- MetalLB IP 풀을 `.200~210` → `.210~220` → `.206~254` → **`.206~239`로 조정** (2026-09-16, 34개). `.200~205`는 VM 전용, `.240~254`는 향후용 여유로 남김 — 처음(11개)엔 너무 작았고 전체(49개)는 과했다고 판단해 중간으로 확정.
 - **NAT→static→bridged 전환을 0-infra/Makefile에서 직접 구현** (2026-09-16). Ansible에 위임하지 않고 `configure-network`/`bridged-up` 타깃으로 0-infra 단계에서 완결 — kubeadm이 시작되기 전에 노드 IP가 이미 고정이어야 하므로. Tart 공식 이미지 기본 계정(`admin`/`admin`)으로 SSH 자동화, `sshpass` 필요.
 - **clone된 VM의 machine-id 중복이 node-2 bridged 무응답의 근본 원인으로 확정, 수정 완료** (2026-09-16). `fix-identity` 타깃(`cloud-init clean --machine-id` + reboot)을 `up`과 `configure-network` 사이에 추가. Mac mini에서 `make clean && make bootstrap`으로 재검증 완료 — **0-infra는 이제 end-to-end로 완전히 검증됨**. 상세는 `0-infra/TROUBLESHOOTING_NOTES.md`.
 - **Pod Network CIDR을 `192.168.0.0/16` → `10.244.0.0/16`으로 변경** (2026-09-16, 1-cluster 계획 단계에서 발견). 기존 검토안이 실제 물리 LAN 대역과 겹치는 문제를 실행 전에 미리 수정.
