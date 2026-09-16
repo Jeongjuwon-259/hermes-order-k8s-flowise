@@ -56,11 +56,11 @@ Tart 설치 (brew, 1회성 수동)
 - **네트워크(iptime BE3600QCA 게이트웨이 기준, `192.168.0.0/24`)**:
   - VM은 브리지 모드(`--net-bridged`)로 iptime 서브넷에서 직접 IP 수령
   - **`tart ip`/ARP 리졸버는 bridged+Ubuntu Server 게스트 조합에서 공식적으로 미해결 버그**([cirruslabs/tart#460](https://github.com/cirruslabs/tart/issues/460), "not possible at the moment") — IP 자동조회에 의존하지 않고 **게스트 OS(netplan) 안에 정적 IP를 직접 박는 방식**으로 확정
-  - 부트스트랩 2단계: ① 최초엔 NAT 모드로 기동해 `tart ip`(정상 동작)로 접속 → ② netplan static IP 설정 + 이후부턴 `--net-bridged`로 기동 전환 (Ansible 초기 태스크로 처리 예정, `1-cluster/` 단계에서 구현)
+  - 부트스트랩 3단계, **전부 0-infra/Makefile에서 처리** (Ansible 불필요): ① `make up` — NAT 모드로 최초 기동, `tart ip` 정상 동작 ② `make configure-network` — NAT IP로 SSH 접속해 게스트에 netplan 정적 IP 주입(cloud-init의 network 관리는 비활성화) ③ `make down` 후 `make bridged-up` — `--net-bridged`로 재기동, 이후 IP는 항상 고정값
   - 노드 정적 IP: `node-1 = 192.168.0.201`, `node-2 = 192.168.0.202`
   - 라우터 DHCP 대여 범위를 `192.168.0.2~199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 구간으로 확보
   - 외부 접근은 포트포워딩 대신 Tailscale/WireGuard VPN 권장
-- **파일**: `Makefile`(`pull`/`up`/`down`/`status`/`ip`/`inventory`/`clean` 타깃, `tart clone`→`tart set`→`tart run`을 순서대로 호출), Ansible `inventory/hosts.ini`(`make inventory`가 생성), `playbook.yml`
+- **파일**: `Makefile`(`pull`/`up`/`configure-network`/`bridged-up`/`down`/`status`/`ip`/`inventory`/`clean` 타깃), `netplan/node-1.yaml`·`netplan/node-2.yaml`(정적 IP 설정, 게스트 인터페이스명은 최초 부팅 후 `ip a`로 확인 필요), Ansible `inventory/hosts.ini`(`make inventory`가 고정 IP 기준으로 생성), `playbook.yml`
 
 ---
 
@@ -168,8 +168,10 @@ Tart 설치 (brew, 1회성 수동)
 - 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
 - Tart VM 이미지/디스크 저장 위치를 `TART_HOME=/Users/blue/iac-project`로 지정 (2026-09-15). 기본값 `~/.tart` 대신 사용.
 - Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
-- **VM 네트워킹: bridged + 게스트 정적 IP로 확정** (2026-09-16). `tart ip`가 bridged+Ubuntu Server 조합에서 공식 미해결 버그([tart#460](https://github.com/cirruslabs/tart/issues/460))라 자동 IP조회 대신 netplan 정적 IP 채택. node-1=`192.168.0.201`, node-2=`192.168.0.202`. 부트스트랩은 NAT로, 이후 Ansible이 static+bridged로 전환.
+- **VM 네트워킹: bridged + 게스트 정적 IP로 확정** (2026-09-16). `tart ip`가 bridged+Ubuntu Server 조합에서 공식 미해결 버그([tart#460](https://github.com/cirruslabs/tart/issues/460))라 자동 IP조회 대신 netplan 정적 IP 채택. node-1=`192.168.0.201`, node-2=`192.168.0.202`.
 - 라우터(ipTIME BE3600QCA) DHCP 범위를 `.2~.199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 확보 (2026-09-16).
 - MetalLB IP 풀을 `.200~210` → **`.210~220`으로 이동** (2026-09-16). 노드 정적 IP(.201/.202)와의 충돌 회피.
+- **NAT→static→bridged 전환을 0-infra/Makefile에서 직접 구현** (2026-09-16). Ansible에 위임하지 않고 `configure-network`/`bridged-up` 타깃으로 0-infra 단계에서 완결 — kubeadm이 시작되기 전에 노드 IP가 이미 고정이어야 하므로. Tart 공식 이미지 기본 계정(`admin`/`admin`)으로 SSH 자동화, `sshpass` 필요.
 - [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
 - [ ] Ingress: nginx-ingress/Traefik(hermes 결정) vs Istio Gateway(Sub-3 결정) — 실제 구현 시점에 재확인
+- [ ] **미검증 항목** (Mac mini 실기 확인 필요): 게스트 인터페이스명(`enp0s1` 가정), macOS 브리지 인터페이스(`en0` 가정), admin 계정 NOPASSWD sudo 여부, netplan apply 도중 SSH 세션이 끊겨도 원격 명령이 끝까지 실행되는지

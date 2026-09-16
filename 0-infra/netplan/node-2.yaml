@@ -1,0 +1,12 @@
+network:
+  version: 2
+  ethernets:
+    enp0s1:        # 실제 인터페이스명은 최초 부팅 후 `ip a`로 확인 (virtio-net 이름이 다를 수 있음)
+      dhcp4: no
+      addresses:
+        - 192.168.0.202/24
+      routes:
+        - to: default
+          via: 192.168.0.1
+      nameservers:
+        addresses: [168.126.63.1, 168.126.63.2]
