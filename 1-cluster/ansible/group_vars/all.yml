@@ -1,0 +1,20 @@
+# 1-cluster/ansible 공통 변수
+# 버전들은 2026-09-16 기준 확인된 최신 안정 버전으로 pin — 재실행 시점에 최신 여부 재확인 권장.
+
+ansible_user: admin
+ansible_password: admin      # Tart 공식 이미지 기본 계정(admin/admin) — 운영 전 교체 권장 (0-infra와 동일)
+ansible_become_password: admin
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+
+pod_network_cidr: 10.244.0.0/16    # 물리 LAN(192.168.0.0/24)과 겹치지 않도록 확정 (README.md §9 참고)
+service_cidr: 10.96.0.0/12         # kubeadm 기본값 그대로 사용
+
+k8s_version: "1.37"                # pkgs.k8s.io repo 경로용 (core:/stable:/v{{ k8s_version }})
+calico_version: "v3.32.2"
+metallb_version: "v0.16.1"
+argocd_version: "stable"           # ArgoCD 공식 권장 설치 채널(stable 브랜치 매니페스트)
+
+metallb_ip_range: "192.168.0.210-192.168.0.220"
+argocd_nodeport: 30080             # 웹 UI HTTP 접근용, 내부(LAN) 전용
+
+control_plane_host: node-1

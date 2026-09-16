@@ -1,0 +1,36 @@
+---
+# roles/metallb — L2 모드, IP 풀 192.168.0.210~220 (README.md §3/§9 참고, DHCP·노드 정적 IP와 분리)
+
+- name: MetalLB 매니페스트 적용
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    apply -f https://raw.githubusercontent.com/metallb/metallb/{{ metallb_version }}/config/manifests/metallb-native.yaml
+  when: inventory_hostname in groups['control_plane']
+  register: metallb_apply
+  changed_when: "'unchanged' not in metallb_apply.stdout"
+
+- name: MetalLB 파드 생성 대기 (apply 직후 아직 파드가 없어 wait가 바로 실패하는 것 방지)
+  ansible.builtin.pause:
+    seconds: 10
+  when: inventory_hostname in groups['control_plane']
+
+- name: MetalLB controller/speaker Ready까지 대기
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    wait --namespace metallb-system --for=condition=Ready pods --all --timeout=300s
+  when: inventory_hostname in groups['control_plane']
+  changed_when: false
+
+- name: IPAddressPool/L2Advertisement 매니페스트 렌더링
+  ansible.builtin.template:
+    src: pool.yaml.j2
+    dest: /tmp/metallb-pool.yaml
+    mode: "0644"
+  when: inventory_hostname in groups['control_plane']
+
+- name: IPAddressPool/L2Advertisement 적용
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /tmp/metallb-pool.yaml
+  when: inventory_hostname in groups['control_plane']
+  register: metallb_pool_apply
+  changed_when: "'unchanged' not in metallb_pool_apply.stdout"

@@ -1,0 +1,62 @@
+---
+# roles/kubeadm — control-plane init + worker join
+# 이 role은 hosts: all 로 호출되고, when 조건으로 control_plane/workers를 분기한다.
+# (control-plane에서 만든 join 커맨드를 hostvars로 worker가 읽어야 하므로 같은 play 안에서 처리)
+
+- name: kubeadm init (control-plane)
+  ansible.builtin.command: >
+    kubeadm init
+    --pod-network-cidr={{ pod_network_cidr }}
+    --service-cidr={{ service_cidr }}
+    --apiserver-advertise-address={{ ansible_host }}
+  args:
+    creates: /etc/kubernetes/admin.conf
+  when: inventory_hostname in groups['control_plane']
+
+- name: "{{ ansible_user }} 홈 디렉토리에 .kube 생성"
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  when: inventory_hostname in groups['control_plane']
+
+- name: kubeconfig을 관리자 계정용으로 복사
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+    remote_src: true
+  when: inventory_hostname in groups['control_plane']
+
+- name: control-plane taint 제거 (워크로드 동시 수용, README.md §3 결정)
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    taint nodes {{ inventory_hostname }} node-role.kubernetes.io/control-plane-
+  when: inventory_hostname in groups['control_plane']
+  register: taint_result
+  failed_when:
+    - taint_result.rc != 0
+    - "'not found' not in taint_result.stderr"
+  changed_when: "'untainted' in taint_result.stdout"
+
+- name: join 커맨드 생성
+  ansible.builtin.command: >
+    kubeadm token create --print-join-command
+  register: join_command_raw
+  when: inventory_hostname in groups['control_plane']
+  changed_when: false
+
+- name: join 커맨드를 fact로 저장 (다른 호스트의 play에서 hostvars로 참조)
+  ansible.builtin.set_fact:
+    join_command: "{{ join_command_raw.stdout }}"
+  when: inventory_hostname in groups['control_plane']
+
+- name: kubeadm join (worker)
+  ansible.builtin.command: "{{ hostvars[groups['control_plane'][0]].join_command }}"
+  args:
+    creates: /etc/kubernetes/kubelet.conf
+  when: inventory_hostname in groups['workers']

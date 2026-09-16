@@ -1,0 +1,29 @@
+---
+# 1-cluster/ansible/playbook.yml
+# 실행: ansible-playbook playbook.yml
+# 전제: 0-infra 완료(node-1/node-2가 bridged+정적 IP로 기동 중), inventory/hosts.ini 존재
+
+- name: 노드 기본 설정 (identity 정리 + containerd + kubeadm 설치)
+  hosts: all
+  roles:
+    - common
+
+- name: kubeadm 클러스터 구성 (control-plane init + worker join)
+  hosts: all
+  roles:
+    - kubeadm
+
+- name: CNI 설치 (Calico)
+  hosts: control_plane
+  roles:
+    - cni-calico
+
+- name: LoadBalancer 설치 (MetalLB)
+  hosts: control_plane
+  roles:
+    - metallb
+
+- name: GitOps 설치 (ArgoCD)
+  hosts: control_plane
+  roles:
+    - argocd

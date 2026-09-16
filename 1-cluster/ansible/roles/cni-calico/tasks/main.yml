@@ -1,0 +1,22 @@
+---
+# roles/cni-calico — control-plane에서만 적용 (클러스터 리소스라 한 번만 apply하면 됨)
+
+- name: Calico 매니페스트 적용
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    apply -f https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/calico.yaml
+  when: inventory_hostname in groups['control_plane']
+  register: calico_apply
+  changed_when: "'unchanged' not in calico_apply.stdout"
+
+- name: Calico 파드 생성 대기 (apply 직후 아직 파드가 없어 wait가 바로 실패하는 것 방지)
+  ansible.builtin.pause:
+    seconds: 10
+  when: inventory_hostname in groups['control_plane']
+
+- name: Calico 노드 Ready까지 대기
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    wait --for=condition=Ready nodes --all --timeout=300s
+  when: inventory_hostname in groups['control_plane']
+  changed_when: false

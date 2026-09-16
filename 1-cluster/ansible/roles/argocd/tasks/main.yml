@@ -1,0 +1,67 @@
+---
+# roles/argocd — 기본 GitOps 셋업 (4-tools에서 앞당겨짐, README.md §3/§9 참고)
+# 웹 UI: 내부(LAN) 전용 HTTP + NodePort로 확정 — TLS/외부 노출 없음
+
+- name: argocd 네임스페이스 생성
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf create namespace argocd
+  when: inventory_hostname in groups['control_plane']
+  register: argocd_ns
+  failed_when:
+    - argocd_ns.rc != 0
+    - "'AlreadyExists' not in argocd_ns.stderr"
+  changed_when: argocd_ns.rc == 0
+
+- name: ArgoCD 설치 매니페스트 적용
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
+  when: inventory_hostname in groups['control_plane']
+  register: argocd_apply
+  changed_when: "'unchanged' not in argocd_apply.stdout"
+
+- name: ArgoCD 파드 생성 대기 (apply 직후 아직 파드가 없어 wait가 바로 실패하는 것 방지)
+  ansible.builtin.pause:
+    seconds: 10
+  when: inventory_hostname in groups['control_plane']
+
+- name: ArgoCD 컴포넌트 Ready까지 대기
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    wait --namespace argocd --for=condition=Ready pods --all --timeout=300s
+  when: inventory_hostname in groups['control_plane']
+  changed_when: false
+
+- name: argocd-server를 insecure(평문 HTTP) 모드로 전환
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    -n argocd patch configmap argocd-cmd-params-cm --type merge
+    -p '{"data":{"server.insecure":"true"}}'
+  when: inventory_hostname in groups['control_plane']
+  register: argocd_insecure_patch
+  changed_when: "'not patched' not in argocd_insecure_patch.stdout"
+
+- name: argocd-server 재시작 (insecure 설정 반영)
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    -n argocd rollout restart deployment argocd-server
+  when:
+    - inventory_hostname in groups['control_plane']
+    - argocd_insecure_patch.changed
+
+- name: argocd-server Service를 NodePort로 전환 (내부 LAN 전용 HTTP 접근)
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    -n argocd patch svc argocd-server -p
+    '{"spec":{"type":"NodePort","ports":[{"name":"http","port":80,"targetPort":8080,"nodePort":{{ argocd_nodeport }}}]}}'
+  when: inventory_hostname in groups['control_plane']
+  register: argocd_svc_patch
+  changed_when: "'not patched' not in argocd_svc_patch.stdout"
+
+- name: ArgoCD 접속 정보 출력
+  ansible.builtin.debug:
+    msg: >
+      ArgoCD 웹 UI: http://{{ hostvars[groups['control_plane'][0]].ansible_host }}:{{ argocd_nodeport }}
+      (초기 admin 비밀번호: kubectl -n argocd get secret argocd-initial-admin-secret
+      -o jsonpath="{.data.password}" | base64 -d)
+  when: inventory_hostname in groups['control_plane']
