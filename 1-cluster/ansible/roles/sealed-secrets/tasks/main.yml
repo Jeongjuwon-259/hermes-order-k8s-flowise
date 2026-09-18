@@ -1,7 +1,7 @@
 ---
 # roles/sealed-secrets — 시크릿을 평문 대신 SealedSecret으로 git에 커밋할 수 있게 하는 컨트롤러
-# 채택 이유(2026-09-16): 홈랩/솔로 규모엔 External Secrets Operator(외부 Vault 필요)나
-# SOPS(KMS/PGP 키 관리 필요)보다 Sealed Secrets가 외부 의존성 없이 가장 단순함.
+# 채택 이유: 홈랩/솔로 규모엔 External Secrets Operator(외부 Vault 필요)나
+# SOPS(KMS/PGP 키 관리 필요)보다 Sealed Secrets가 외부 의존성 없이 가장 단순함 (배경: HISTORY.md §3).
 # helm.sh/sealed-secrets 는 프로젝트 공식 차트 저장소(bitnami-labs.github.io)를 그대로 사용 —
 # Postgres 때 문제였던 "Bitnami 범용 앱 카탈로그(docker.io/bitnami)"와는 무관한 별개 프로젝트.
 

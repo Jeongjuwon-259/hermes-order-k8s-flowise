@@ -1,5 +1,5 @@
 # 1-cluster/ansible 공통 변수
-# 버전들은 2026-09-16 기준 확인된 최신 안정 버전으로 pin — 재실행 시점에 최신 여부 재확인 권장.
+# 버전들은 확인된 최신 안정 버전으로 pin — 재실행 시점에 최신 여부 재확인 권장 (pin 배경: HISTORY.md §3).
 
 ansible_user: admin
 ansible_password: admin      # Tart 공식 이미지 기본 계정(admin/admin) — 운영 전 교체 권장 (0-infra와 동일)

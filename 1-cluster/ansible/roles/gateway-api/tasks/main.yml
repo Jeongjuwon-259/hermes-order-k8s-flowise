@@ -1,6 +1,6 @@
 ---
 # roles/gateway-api — Kubernetes Gateway API CRD 설치
-# Istio가 자체 Gateway/VirtualService API를 deprecate하고 이 표준 API로 전환 권장 중(2026-09-16 확인)
+# Istio가 자체 Gateway/VirtualService API를 deprecate하고 이 표준 API로 전환 권장 중 (배경: HISTORY.md §3)
 # roles/istio보다 먼저 실행되어야 함 (istiod가 Gateway API CRD 존재를 전제로 컨트롤러 등록)
 
 - name: Gateway API CRD 적용 (standard channel)

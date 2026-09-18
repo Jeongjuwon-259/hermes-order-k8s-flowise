@@ -26,7 +26,7 @@ Tart 설치 (brew, 1회성 수동)
 
 **역할 분리 원칙**: VM 프로비저닝은 Makefile(`tart` CLI 직접 래핑), 노드 접속 후 모든 설정(패키지 설치·kubeadm·CNI 적용)은 Ansible이 담당한다. 이 경계를 섞지 않는다.
 
-**GitOps 리포 구조**: ArgoCD 매니페스트(`5-gitops/`)와 실제 워크로드 소스(`2-services/`, `3-workloads/`)를 같은 리포에 두되, ArgoCD `Application`의 `path`로 경계를 분리한다 — 인프라 프로비저닝 코드(0-infra/1-cluster)는 ArgoCD가 감시하지 않음. 솔로 프로젝트라 리포를 나누는 관리 비용이 아직 정당화되지 않는다고 판단 (2026-09-16 결정). 재사용성이 필요해지거나 커밋 이력이 너무 섞여 불편해지면 `git subtree split`으로 이력 보존하며 분리.
+**GitOps 리포 구조**: ArgoCD 매니페스트(`5-gitops/`)와 실제 워크로드 소스(`2-services/`, `3-workloads/`)를 같은 리포에 두되, ArgoCD `Application`의 `path`로 경계를 분리한다 — 인프라 프로비저닝 코드(0-infra/1-cluster)는 ArgoCD가 감시하지 않음. 솔로 프로젝트라 리포를 나누는 관리 비용이 아직 정당화되지 않는다고 판단. 재사용성이 필요해지거나 커밋 이력이 너무 섞여 불편해지면 `git subtree split`으로 이력 보존하며 분리. (결정 배경: `HISTORY.md` §1)
 
 ---
 
@@ -78,7 +78,7 @@ Tart 설치 (brew, 1회성 수동)
 | CNI | Calico | Cilium은 리소스 여유 확인 후 추후 학습용 검토 |
 | LoadBalancer | MetalLB (L2 모드) | IP 풀 `192.168.0.206~239` — DHCP(`.2~.199`)·VM 예약 구간(`.200~205`)과 모두 분리, `.240~254`는 향후용 여유 |
 | DNS | CoreDNS (기본 내장) | |
-| Ingress/Gateway | **Istio (Gateway API 모드)** | (2026-09-16 확정) nginx-ingress/Traefik 계획 폐기, Sub-3 프로젝트 결정과 통일. VirtualService 대신 표준 Gateway API(HTTPRoute) 사용 — Istio가 자체 API 대신 이 표준 전환을 공식 권장(2026-09-16 확인). `roles/gateway-api`+`roles/istio` 소스 작성 완료(Helm 기반, Istio 1.31.0), Mac mini 실행은 아직 |
+| Ingress/Gateway | **Istio (Gateway API 모드)** | nginx-ingress/Traefik 대신 채택, Sub-3 프로젝트 결정과 통일. VirtualService 대신 표준 Gateway API(HTTPRoute) 사용 — Istio가 자체 API 대신 이 표준 전환을 공식 권장. `roles/gateway-api`+`roles/istio` 소스 작성 완료(Helm 기반, Istio 1.31.0), Mac mini 실행은 아직 (배경: `HISTORY.md` §1) |
 | 영속 스토리지 | **LocalPV + Velero 백업** | 2노드 환경에서 Longhorn(분산 블록 스토리지)의 이점이 낮다고 판단, 미적용으로 확정 |
 | GitOps | **ArgoCD** | 기본 셋업에 포함(1-cluster 단계에서 함께 설치) — 기존엔 `4-tools`(클러스터 안정화 이후)로 미뤄뒀으나 앞당김. 웹 UI는 내부(LAN) 전용 HTTP + NodePort(`30080`)로 접근, 외부 노출 없음 |
 | GitOps 배포 방식 | **ApplicationSet** | `5-gitops/argocd-values/app/*.yaml` 파일마다 Application 자동 생성 (Git file generator) — 수동 Application 관리 대신 |
@@ -155,7 +155,7 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 7. `5-gitops/` — ArgoCD Application 정의
 
-과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 가져오되, **2026-09-16 최신 GitOps/K8s 트렌드 검토 후 세부는 갱신**:
+과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 가져오되, 최신 GitOps/K8s 트렌드 검토 후 세부는 갱신했다:
 
 ```
 5-gitops/
@@ -178,7 +178,7 @@ Tart 설치 (brew, 1회성 수동)
 └── applicationset.yaml                  # ⚠️ 초안, 미검증 — Git file generator로 argocd-values/app/*.yaml마다 Application 자동 생성
 ```
 
-**최신 트렌드 반영 사항** (2026-09-16 리서치 후 확정, 기존 참고 구조 대비 변경):
+**최신 트렌드 반영 사항** (기존 참고 구조 대비 변경):
 1. **Gateway/VirtualService → Gateway API(HTTPRoute)**: Istio가 자체 Gateway/VirtualService API를 deprecate하고 표준 Gateway API 전환을 공식 권장. `Gateway` 리소스는 앱마다 만들지 않고 `1-cluster/ansible/roles/istio`가 1회 생성한 공유 Gateway(`istio-system/shared-gateway`)를 모든 앱의 `HTTPRoute`가 공유 (Gateway API의 역할 분리 모델: 인프라 제공자=GatewayClass, 클러스터 운영자=Gateway, 앱 개발자=HTTPRoute). `DestinationRule`은 세부 트래픽 정책 기능이 아직 Gateway API에 없어서 Istio 자체 CRD로 유지
 2. **수동 Application → ApplicationSet**: `{project}-values.yaml` 하나당 앱 하나 배포하는 구조는 ApplicationSet Git file generator에 정확히 맞음 — Application을 손으로 안 만들어도 됨
 3. **평문 secret 커밋 → Sealed Secrets**: `secret-docker.yaml`/`project-secret.yaml`을 그대로 git에 커밋하던 방식 대신, `1-cluster/ansible/roles/sealed-secrets`가 설치하는 컨트롤러로 암호화된 `SealedSecret`만 커밋 (ESO는 외부 Vault 필요, SOPS는 KMS 관리 필요해서 홈랩 규모엔 과함 — Sealed Secrets가 외부 의존성 없이 가장 단순)
@@ -212,23 +212,5 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 10. 결정 로그
 
-- VM 노드 스펙 15GB×2(총 30GB) → **14GB×2(총 28GB)로 하향 조정** (2026-09-15). 새 예산(~26~30GB) 안에 더 여유 있게 들어옴.
-- 디스크 100GB → **170GB로 상향 조정** (2026-09-15).
-- Tart VM 이미지/디스크 저장 위치를 `TART_HOME=/Users/blue/iac-project`로 지정 (2026-09-15). 기본값 `~/.tart` 대신 사용.
-- Postgres는 Helm 차트로 배포 (CloudNativePG 오퍼레이터 미사용).
-- **VM 네트워킹: bridged + 게스트 정적 IP로 확정** (2026-09-16). `tart ip`가 bridged+Ubuntu Server 조합에서 공식 미해결 버그([tart#460](https://github.com/cirruslabs/tart/issues/460))라 자동 IP조회 대신 netplan 정적 IP 채택. node-1=`192.168.0.201`, node-2=`192.168.0.202`.
-- 라우터(ipTIME BE3600QCA) DHCP 범위를 `.2~.199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 확보 (2026-09-16).
-- MetalLB IP 풀을 `.200~210` → `.210~220` → `.206~254` → **`.206~239`로 조정** (2026-09-16, 34개). `.200~205`는 VM 전용, `.240~254`는 향후용 여유로 남김 — 처음(11개)엔 너무 작았고 전체(49개)는 과했다고 판단해 중간으로 확정.
-- **NAT→static→bridged 전환을 0-infra/Makefile에서 직접 구현** (2026-09-16). Ansible에 위임하지 않고 `configure-network`/`bridged-up` 타깃으로 0-infra 단계에서 완결 — kubeadm이 시작되기 전에 노드 IP가 이미 고정이어야 하므로. Tart 공식 이미지 기본 계정(`admin`/`admin`)으로 SSH 자동화, `sshpass` 필요.
-- **clone된 VM의 machine-id 중복이 node-2 bridged 무응답의 근본 원인으로 확정, 수정 완료** (2026-09-16). `fix-identity` 타깃(`cloud-init clean --machine-id` + reboot)을 `up`과 `configure-network` 사이에 추가. Mac mini에서 `make clean && make bootstrap`으로 재검증 완료 — **0-infra는 이제 end-to-end로 완전히 검증됨**. 상세는 `0-infra/TROUBLESHOOTING_NOTES.md`.
-- **Pod Network CIDR을 `192.168.0.0/16` → `10.244.0.0/16`으로 변경** (2026-09-16, 1-cluster 계획 단계에서 발견). 기존 검토안이 실제 물리 LAN 대역과 겹치는 문제를 실행 전에 미리 수정.
-- **ArgoCD를 `4-tools`(추후)에서 `1-cluster` 기본 셋업으로 앞당김** (2026-09-16).
-- **ArgoCD 웹 UI: 내부 전용 HTTP + NodePort(`30080`)로 확정** (2026-09-16). TLS/외부 노출 없음 — `server.insecure: "true"`로 평문 HTTP 서빙.
-- **ArgoCD 매니페스트 리포 분리 여부: 지금은 같은 리포, 나중에 분리** (2026-09-16). `5-gitops/`를 신설해 ArgoCD `Application` CR을 두되, 실제 워크로드 소스(`2-services/`, `3-workloads/`)는 옮기지 않고 그대로 둠 — 솔로 프로젝트 규모에서 리포 분리 관리 비용이 아직 정당화 안 됨. 재사용성 필요해지거나 커밋 이력이 섞여 불편해지면 `git subtree split`으로 분리.
-- [ ] Windows 노드 조인 시점 (선행 작업 vs 2노드 안정화 이후)
-- **Ingress/Gateway: Istio로 통일 확정** (2026-09-16). hermes의 nginx-ingress/Traefik 검토안 폐기, Sub-3 결정과 일치시킴.
-- **`5-gitops/` 구조를 `argocd-templates`(공유 차트) + `argocd-values`(앱별 값) 2단 구조로 확정** (2026-09-16). 과거 프로젝트 패턴 재사용. 업스트림 Helm 차트를 쓰는 서비스(Postgres 등)는 이 구조를 거치지 않고 ArgoCD가 직접 참조.
-- **최신 K8s/GitOps 트렌드 검토 후 3가지 반영, 소스 작성 완료** (2026-09-16): (1) Istio VirtualService → 표준 Gateway API(HTTPRoute), Istio가 공식 권장 전환 (2) 수동 ArgoCD Application → ApplicationSet(Git file generator), `argocd-values`의 파일당-앱 구조에 자연스럽게 맞음 (3) 평문 secret 커밋 → Sealed Secrets, ESO/SOPS 대비 외부 의존성 없어 홈랩 규모에 적합. `1-cluster/ansible`에 `roles/gateway-api`(Gateway API CRD v1.6.2), `roles/istio`(Helm 기반, 1.31.0, 공유 Gateway 1회 생성), `roles/sealed-secrets` 추가, `5-gitops/argocd-templates/chart/app/stable` 차트 작성(로컬 `helm lint`/`helm template` 통과), `5-gitops/applicationset.yaml`(초안, 미검증).
-- [ ] Istio/Gateway API/Sealed Secrets/ApplicationSet — 전부 소스만 작성됨, **Mac mini에서 `ansible-playbook` 실행 검증 아직 안 함**
-- [ ] `applicationset.yaml`은 실제 앱 값 파일 추가 후 sync 확인 전까지 미신뢰 상태로 취급
-- [ ] `5-gitops/argocd-templates`의 `func/` — 용도 불명확해서 생성 안 함, 실제 필요해지면 내용과 함께 추가
+이 문서가 설명하는 아키텍처에 이르기까지의 의사결정 배경, 변경 이력, 미검증/미결
+항목은 저장소 루트의 [`HISTORY.md`](../HISTORY.md) §1에서 관리합니다.

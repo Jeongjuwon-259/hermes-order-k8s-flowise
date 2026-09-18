@@ -54,10 +54,10 @@
 ## 관련 파일
 
 - `0-infra/Makefile`: VM 자동화 (up, down, configure-network, bootstrap, clean)
-- `0-infra/TROUBLESHOOTING_NOTES.md`: 노드2 정적IP 무응답 문제, netplan/SSH 주의사항 8가지
-- `0-infra/KNOWN_ISSUES.md` (삭제됨 → `TROUBLESHOOTING_NOTES.md`로 통합)
+- `0-infra/TROUBLESHOOTING_NOTES.md`: 노드2 정적IP 무응답 문제 등 참고 → 상세 서사는 `HISTORY.md` §2
 - `1-cluster/ansible/playbook.yml`: 전체 Ansible 플레이북 (common → kubeadm → calico → metallb → argocd → gateway-api → istio → sealed-secrets)
 - `1-cluster/ansible/inventory/hosts.ini`: node-1 (201), node-2 (202)
+- `HISTORY.md`: 프로젝트 전체의 결정 로그 / 트러블슈팅 기록
 
 ---
 
