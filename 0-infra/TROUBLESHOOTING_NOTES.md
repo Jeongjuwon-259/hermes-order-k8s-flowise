@@ -75,3 +75,73 @@ make bootstrap   # up → fix-identity → configure-network → down → bridge
 ```
 `make bootstrap` 실행 결과 node-1(`192.168.0.201`), node-2
 (`192.168.0.202`) 모두 ping/ssh 정상 확인됨 (2026-09-16).
+
+---
+
+## [해결됨] 2026-09-18 재발 — bridged 전환 후 ping/ssh 전부 무응답 (복합 원인 3가지)
+
+`make clean && make bootstrap`을 재실행했을 때 `verify` 단계에서 두 노드
+모두 100% 패킷 손실, SSH 타임아웃이 재발함. 원인을 하나씩 분리해서
+확인한 결과 아래 3가지가 겹쳐서 발생했다.
+
+### 원인 1 — `tart stop` 이후에도 이전 프로세스가 좀비로 남음
+`nohup tart run $n ... & disown`으로 띄운 프로세스가 `tart stop $n`
+실행 후에도 `ps aux`에 그대로 남아있었다. 이 상태에서 bridged 모드로
+새 `tart run`을 또 띄우면 **같은 VM에 대해 프로세스가 두 개(구 NAT +
+신규 bridged) 동시에 실행되는 상태**가 되어 네트워크가 완전히 꼬인다.
+- 확인: `ps aux | grep "tart run node-1"` 등으로 같은 노드 이름의
+  프로세스가 1개보다 많으면 이 문제.
+- 해결: `down` 타깃에 `tart stop` 이후 남은 프로세스를 `pgrep -f "tart
+  run <node> "` + `kill -9`로 강제 정리하는 로직 추가함 (Makefile 참고).
+
+### 원인 2 — macOS ARP 캐시 stale REJECT 엔트리
+`route get 192.168.0.201`로 확인했을 때 `flags: REJECT`가 붙어있었다.
+이전 시도에서 "Host is down"으로 학습된 캐시가 만료 전까지 남아 새
+패킷을 즉시 차단한다.
+- 확인: `route get <ip>` 결과에 `REJECT` 플래그 확인.
+- 해결: `sudo arp -d <ip>`로 캐시 삭제 (sudo 필요 — 에이전트가 대신
+  비밀번호를 입력하지 말고 사용자가 직접 실행). 자연 만료(수 분~20분)
+  대기도 가능.
+
+### 원인 3(오판이었음, 정정) — netplan apply 후 NAT IP 재검증은 하지 말 것
+초기 대응 때 "apply 후 실제 IP가 반영됐는지 NAT IP로 재확인, 안 되면
+재시도" 로직을 Makefile에 넣었으나, 이는 **오판**이었다. 정적 IP를
+적용하는 순간 게스트 인터페이스에서 NAT 주소(192.168.64.x)가 사라지는
+것이 정상 동작이므로, apply 직후 NAT IP로 재접속하면 (bridged 전환
+전이라) 항상 타임아웃된다. 이걸 "cloud-init이 설정을 초기화했다"는
+신호로 착각해 재시도 루프를 넣었더니 오히려 정상 케이스를 실패로
+처리해 `make bootstrap`이 깨지는 사고가 났다. **netplan apply 이후의
+실제 성공 여부는 반드시 bridged-up 이후 `verify` 단계(TARGET_IP로
+ping/ssh)에서만 판단할 것 — NAT IP로 되돌아가 확인하는 로직은 절대
+넣지 말 것.**
+
+### 원인 4 (재현, 2026-09-18) — 두 노드 순차 configure 시 마지막 노드의 apply 반영 시간 부족
+`configure-network`가 node-1 → node-2 순으로 순차 실행되는데, `bootstrap`은
+전체 `configure-network` 완료 후 일괄로 10초만 대기하고 `down`으로 넘어갔다.
+이 경우 **먼저 처리된 node-1은 apply 후 충분히 시간이 지나 안정화되지만,
+나중에 처리된 node-2는 apply 직후 곧바로 stop되어 netplan 설정이 디스크에
+완전히 반영(systemd-networkd reload, 파일 flush)되기 전에 종료됨** —
+결과적으로 node-2만 bridged 전환 후에도 `/etc/netplan/99-static.yaml`이
+0바이트로 비어있고 DHCP(NAT IP)로 되돌아간 상태가 재현됨.
+- 증상: node-1은 ping/ssh 정상, node-2만 100% 실패. ARP `sudo arp -d`로도
+  해결 안 됨(ARP 문제가 아니라 VM이 실제로 다른 서브넷의 DHCP IP를 쓰고
+  있었음).
+- 확인: node-2를 NAT로 재부팅해 `sudo cat /etc/netplan/99-static.yaml` →
+  빈 파일 확인.
+- 해결: `bootstrap`의 `configure-network` 완료 후 `down` 진입 전 대기를
+  10초 → 30초로 늘림. 근본적으로는 노드별로 configure 직후 개별 안정화
+  시간을 주는 것이 이상적이나, 현재는 전체 완료 후 일괄 대기로 완화.
+
+### 부수 발견 — make 3.81 패턴 규칙 버그
+`configure-network-node-%:` 같은 암묵적 패턴 규칙을 이 Makefile
+조합에서 실행하면 `make --debug=b`에 "Successfully remade target
+file" 로그가 찍히는데도 실제로는 레시피가 실행되지 않고 "Nothing to
+be done for..."로 끝나는 경우가 있었다 (macOS 기본 CommandLineTools
+make 3.81). **패턴 규칙(%) 대신 개별 구체 타깃 + `define/call`로
+공통 로직을 재사용하는 방식으로 되돌림.** 이 Makefile을 다시
+"간결하게 리팩터링"하고 싶어질 때 %-패턴을 쓰지 말 것.
+
+### 검증
+위 3가지를 모두 반영한 뒤 `make bootstrap` 재실행 → node-1
+(192.168.0.201), node-2(192.168.0.202) ping 0% loss, SSH hostname
+정상 확인 (2026-09-18).
