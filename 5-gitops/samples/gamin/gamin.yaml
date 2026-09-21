@@ -1,34 +1,34 @@
-# 5-gitops/samples/gamin/namespace.yaml
-# gamin MCP Server — 네임스페이스
+# 5-gitops/samples/garmin/namespace.yaml
+# garmin MCP Server — 네임스페이스
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: gamin
+  name: garmin
   labels:
-    app: gamin-mcp
+    app: garmin-mcp
 ---
-# 5-gitops/samples/gamin/deployment.yaml
-# gamin MCP Server — 컨테이너 빌드/배포용 매니페스트
+# 5-gitops/samples/garmin/deployment.yaml
+# garmin MCP Server — 컨테이너 빌드/배포용 매니페스트
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gamin-mcp
-  namespace: gamin
+  name: garmin-mcp
+  namespace: garmin
   labels:
-    app: gamin-mcp
+    app: garmin-mcp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gamin-mcp
+      app: garmin-mcp
   template:
     metadata:
       labels:
-        app: gamin-mcp
+        app: garmin-mcp
     spec:
       containers:
-        - name: gamin-mcp
-          image: gamin_mcp:latest
+        - name: garmin-mcp
+          image: garmin_mcp:latest
           imagePullPolicy: Never  # 로컬 빌드 이미지 (Minikube/kind 등)
           resources:
             requests:
@@ -42,17 +42,17 @@ spec:
             - name: GARMIN_TOKEN_DIR
               value: "/root/.garminconnect"
 ---
-# 5-gitops/samples/gamin/service.yaml
+# 5-gitops/samples/garmin/service.yaml
 # ClusterIP — Cluster 내부에서 MCP 서버로 접근 (필요시 NodePort로 변경 가능)
 apiVersion: v1
 kind: Service
 metadata:
-  name: gamin-mcp
-  namespace: gamin
+  name: garmin-mcp
+  namespace: garmin
 spec:
   type: ClusterIP
   selector:
-    app: gamin-mcp
+    app: garmin-mcp
   ports:
     - port: 8080
       targetPort: 8080
