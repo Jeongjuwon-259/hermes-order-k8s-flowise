@@ -79,5 +79,5 @@
 
 - **Hermes Agent는 이 파일의 내용을 참고로 하여 컨텍스트를 재구성하지만, 소스 코드의 실제 변경/수정/커밋은하지 않습니다.**
 - **Git 작업은 다른 호스트에서 직접 진행**하며, 이 Hermes Agent는 `git pull`로 최신 상태를 받아서 분석합니다.
-- `TART_HOME=/Users/blue/iac-project` — Tart VM 이미지 경로
+- `TART_HOME=/Users/blue/tart-home` — Tart VM 이미지 경로
 - Bridge 인터페이스: `en8` (USB AX88179B 이더넷)

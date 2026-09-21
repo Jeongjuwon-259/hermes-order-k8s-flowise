@@ -28,7 +28,7 @@ git log --oneline -3
 
 ```bash
 # 또는 수동으로 다음을 단계별 실행:
-export TART_HOME=/Users/blue/iac-project
+export TART_HOME=/Users.blue/tart-home
 cd 0-infra
 make clean    # VM 완전 삭제 (선택 사항, clean 상태라면 생략 가능)
 make bootstrap # up → fix-identity → configure-network → bridged-up → verify
@@ -73,7 +73,7 @@ Kubeadm 클러스터, Calico, MetalLB, ArgoCD, Istio, Sealed Secrets 적용.
 ## 중요
 
 - **Hermes Agent는 컨텍스트 재구성만 합니다. Git 커밋/푸시는 다른 호스트에서 진행합니다.**
-- `TART_HOME=/Users/blue/iac-project` — 명시 설정
+- `TART_HOME=/Users/blue/tart-home` — 명시 설정
 - Bridge 인터페이스: `en8` (USB AX88179B)
 - **`make bootstrap` 후 `ansible-playbook` 실행 전에 60초 대기 필수 (네트워크가 완전히 붙을 때까지)**
 - 작업 전/중에 `git pull`로 최신 상태 확인

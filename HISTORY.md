@@ -12,7 +12,7 @@
 
 - VM 노드 스펙 15GB×2(총 30GB) → 14GB×2(총 28GB)로 하향 조정 (2026-09-15). 리소스 예산(~26~30GB) 안에 더 여유 있게 들어옴.
 - 디스크 100GB → 170GB로 상향 조정 (2026-09-15).
-- Tart VM 이미지/디스크 저장 위치를 `TART_HOME=/Users/blue/iac-project`로 지정 (2026-09-15). 기본값 `~/.tart` 대신 사용.
+- Tart VM 이미지/디스크 저장 위치를 `TART_HOME=/Users/blue/tart-home`로 지정 (2026-09-15). 기본값 `~/.tart` 대신 사용.
 - Postgres는 Helm 차트로 배포하기로 결정 (CloudNativePG 오퍼레이터 미사용).
 - **VM 네트워킹: bridged + 게스트 정적 IP로 확정** (2026-09-16). `tart ip`가 bridged+Ubuntu Server 조합에서 공식 미해결 버그([tart#460](https://github.com/cirruslabs/tart/issues/460))라 자동 IP조회 대신 netplan 정적 IP 채택. node-1=`192.168.0.201`, node-2=`192.168.0.202`.
 - 라우터(ipTIME BE3600QCA) DHCP 범위를 `.2~.199`로 축소 완료(실기), `.200~.254`는 고정 IP 전용 확보 (2026-09-16).

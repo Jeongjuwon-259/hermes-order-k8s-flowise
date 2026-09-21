@@ -12,7 +12,7 @@
 # `HISTORY.md` §2에서 관리한다. 아래 각 타깃의 주석은 "왜 이 순서/방식이어야 하는지"만
 # 간단히 남긴다 — 이 파일을 %-패턴 등으로 재구조화하기 전에 반드시 HISTORY.md §2를 먼저 읽을 것.
 
-export TART_HOME ?= /Users/blue/iac-project
+export TART_HOME ?= /Users/blue/tart-home
 
 IMAGE       ?= ghcr.io/cirruslabs/ubuntu:24.04
 CPU_COUNT   ?= 4
@@ -240,6 +240,8 @@ down:
 ## 완전 삭제 (VM/디스크 모두 제거)
 ## [개선] 삭제 시 known_hosts에서 관련 IP의 호스트 키도 자동 정리 —
 ##  재부팅/재설치 시 "REMOTE HOST IDENTIFICATION HAS CHANGED" 오류 방지 (HISTORY.md §2).
+## [개선] TART_HOME 전체 디렉토리 (VM/OCI 캐시/이미지)도 함께 삭제 —
+##  ~/.tart와 TART_HOME 모두 정리 (중복为防 하는 현상 방지).
 clean: down
 	-tart delete node-1
 	-tart delete node-2
@@ -247,3 +249,7 @@ clean: down
 	for ip in $(NODE1_IP) $(NODE2_IP) $(NODE1_IP_FALLBACK); do \
 		ssh-keygen -R $$ip >/dev/null 2>&1 || true; \
 	done
+	@echo "[clean] TART_HOME=$(TART_HOME) 디렉토리 전체 삭제"; \
+	rm -rf $(TART_HOME)
+	@echo "[clean] ~/.tart 디렉토리 전체 삭제"; \
+	rm -rf ~/.tart

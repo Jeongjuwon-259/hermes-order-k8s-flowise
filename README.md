@@ -56,7 +56,7 @@ Tart 설치 (brew, 1회성 수동)
 - **도구**: Tart(설치만 수동) + Makefile(`tart` CLI 래핑) + Ansible
 - **VM 사양**: node-1(control-plane) 14GB/4vCPU, node-2(worker) 14GB/4vCPU, 디스크 170GB
 - **OS**: Ubuntu Server 24.04 LTS — Tart 공식 레지스트리에 Rocky Linux 사전 빌드 이미지가 없어 채택 (Rocky 선호는 유지되나 인프라 제약상 Ubuntu로 결정)
-- **VM 이미지/디스크 저장 위치**: `TART_HOME=/Users/blue/iac-project` (기본 `~/.tart` 대신 지정)
+- **VM 이미지/디스크 저장 위치**: `TART_HOME=/Users/blue/tart-home` (기본 `~/.tart` 대신 지정)
 - **네트워크(iptime BE3600QCA 게이트웨이 기준, `192.168.0.0/24`)**:
   - VM은 브리지 모드(`--net-bridged`)로 iptime 서브넷에서 직접 IP 수령
   - **`tart ip`/ARP 리졸버는 bridged+Ubuntu Server 게스트 조합에서 공식적으로 미해결 버그**([cirruslabs/tart#460](https://github.com/cirruslabs/tart/issues/460), "not possible at the moment") — IP 자동조회에 의존하지 않고 **게스트 OS(netplan) 안에 정적 IP를 직접 박는 방식**으로 확정
