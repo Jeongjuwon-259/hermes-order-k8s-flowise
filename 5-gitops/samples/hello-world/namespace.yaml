@@ -1,0 +1,6 @@
+# 5-gitops/samples/hello-world/namespace.yaml
+# 클러스터 배포 검증용 샘플 네임스페이스 (ArgoCD 없이 kubectl apply -f로도 바로 확인 가능)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hello-world
