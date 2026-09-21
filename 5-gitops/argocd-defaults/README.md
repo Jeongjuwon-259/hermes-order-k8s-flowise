@@ -1,4 +1,5 @@
 # ArgoCD Defaults — 운용 가이드 (초안)
+# 이 문서 안에서 설계한 작업내역은 해당 폴더에서 코드 작성 및 해결한다 (argocd-defaults)
 
 > **상태:** 설계 메모 단계. 이 문서는 방향성 정리용 가이드이며, 실제 구현 파일(Ansible
 > role, ArgoCD manifest 등)은 별도 작업으로 만들어야 한다. 아래 각 항목은 원래
@@ -8,8 +9,11 @@
 
 ArgoCD를 편하게 운용·관리하기 위해 아래 두 가지 자동화가 필요하다.
 
-1. 각 노드에 컨테이너 이미지를 배포하는 방법
-2. ArgoCD의 Git 저장소 연결(Settings → Repositories) 자동화
+(작업순서)
+0. ArgoCD Repository 연결 자동화 (이거먼저)
+1. 도커파일 작성 및 구성 설계
+2. 각 노드에 컨테이너 이미지를 배포하는 방법
+3. ArgoCD의 Git 저장소 연결(Settings → Repositories) 자동화
 
 ---
 
@@ -22,7 +26,7 @@ ArgoCD를 편하게 운용·관리하기 위해 아래 두 가지 자동화가 �
   동일한 체계 재사용 가능). 구체적인 role 설계는 미정 — 아래 해결 필요:
   - 빌드 결과 이미지를 워커 노드에 전달하는 방식 (예: `ctr image export/import`,
     사설 레지스트리 없이 tar 전달 등)
-  - 빌드 트리거 시점 (Git push 감지 vs 수동 실행)
+  - 빌드 트리거 시점 (수동 실행)
 
 ## 2. ArgoCD Repository 연결 자동화
 
