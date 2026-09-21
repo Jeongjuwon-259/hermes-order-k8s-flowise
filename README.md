@@ -172,8 +172,9 @@ Tart 설치 (brew, 1회성 수동)
 │                   ├── httproute.yaml         # Gateway API HTTPRoute (VirtualService 대체)
 │                   ├── destination-rule.yaml  # Istio 자체 CRD 유지 (세부 트래픽 정책용)
 │                   └── sealed-secret.yaml     # secret-docker.yaml/project-secret.yaml(평문) 대체
-├── argocd-garmin-templates/             # garmin 프로젝트 전용 차트 (위 보일러플레이트에서 복사)
-│   └── chart/app/stable/ ...            # 구조 동일, values.yaml만 프로젝트에 맞게 채움
+├── argocd-garmin-templates/             # garmin 프로젝트 전용 차트 (위 보일러플레이트에서 필요한 kind만 복사)
+│   └── chart/app/stable/ ...            # values.yaml 없음 — 값은 argocd-values/app/garmin-mcp-values.yaml이 유일한 소스
+│                                         # (지금 안 쓰는 hpa/destination-rule/sealed-secret도 제외)
 ├── argocd-values/
 │   └── app/
 │       └── example-values.yaml          # 실제 앱 만들 때 {project}-values.yaml로 복사

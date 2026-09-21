@@ -1,5 +1,8 @@
 # garmin MCP 서버 배포 값 — argocd-defaults/README.md §4 참고
 # ⚠️ 초안 — 아직 sync 검증 안 됨
+#
+# argocd-garmin-templates 차트에는 values.yaml이 없다 — 이 파일이 유일한 값 소스.
+# (차트 기본값과 이 override가 100% 중복되던 문제를 해소하기 위해 차트 쪽 values.yaml 삭제)
 
 project: garmin
 
