@@ -17,16 +17,6 @@ route:
   enabled: false
   hostnames: []
 
-destinationRule:
-  enabled: false
-  trafficPolicy: {}
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 80
-
 resources:
   requests:
     cpu: 100m
@@ -40,4 +30,3 @@ env:
     value: "/root/.garminconnect"
 
 # garmin 인증 관련 SealedSecret은 이번 단계에서 제외 (argocd-defaults/README.md §4)
-sealedSecrets: []

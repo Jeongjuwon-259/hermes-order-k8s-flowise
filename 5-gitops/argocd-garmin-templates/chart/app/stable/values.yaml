@@ -13,16 +13,6 @@ route:
   enabled: false
   hostnames: []
 
-destinationRule:
-  enabled: false
-  trafficPolicy: {}
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 80
-
 resources:
   requests:
     cpu: 100m
@@ -34,5 +24,3 @@ resources:
 env:
   - name: GARMIN_TOKEN_DIR
     value: "/root/.garminconnect"
-
-sealedSecrets: []
