@@ -91,6 +91,34 @@ done for ..."을 내며 조용히 no-op 처리하는 버그가 있음 확인. �
 검증: 위 항목을 모두 반영한 뒤 `make bootstrap` 재실행 → node-1(192.168.0.201),
 node-2(192.168.0.202) ping 0% loss, SSH hostname 정상 확인 (2026-09-18).
 
+### [2026-09-21] Bootstrap 실행 중 NAT DHCP 실패 / Bridged DHCP 응답 지연 → 재시도 로직 추가
+
+**증상**: `make bootstrap` 실행 시 두 가지 예외가 recurring.
+
+1. **NAT DHCP 실패** (VM 재생성 시 간헐적): `tart ip node-X --wait 120`이 120초 후에도 IP
+   반환하지 않음 → 기존 코드가 `exit 1`로 전체 bootstrap 중단. 수동 `make clean && make bootstrap`
+   재실행 필요.
+2. **Bridged DHCP 응답 지연** (기억: DHCPlease 재발 가능): bridged 전환 후 `ping`이 120초(24×5초)
+   재시도 후 silently 실패 (`set -e` 없으므로 re-run 필요). DHCP 서버 응답까지 수 분 이상
+   소요되는 환경에서 timeout이 너무 짧음.
+
+**근본 원인**: `tart ip` (NAT)는 cirruslabs/tart#460 버그로 공식 미해결. NAT 부트스트랩 단계에서만
+신뢰 가능하며, VM 생성/재부팅 시 DHCP 응답 시간 차이가 큼. Bridged 전환 후 정적 IP(netplan)가
+적용되어도 macOS 물리 네트워크의 DHCP 서버 응답 시간이 느린 경우(라우터 CACHE, AP 상태) 최대 3~4분
+걸릴 수 있음.
+
+**해결**: `0-infra/Makefile`에 3개 utility 함수 추가 (2026-09-21).
+
+- `wait-for-nat-ip`: `tart ip` 실패 시 5회 재시도 (5초 간격 = 25초), 실패 시 명확 안내 메시지
+  (`make clean && make bootstrap` 권장).
+- `wait-for-bridged-ip`: `ping` 실패 시 48회 재시도 (5초 간격 = 4분), 실패 시 DHCPlease 안내
+  메시지 (DHCP 서버 활성화 확인, MAC whitelist 확인, clean+b 권장).
+- SSH 실패 시 `ssh-keygen -R` 자동 호출 → known_hosts stale 해소.
+- `NET_IFACE` 감지 실패 시 `en0/en1/en8` fallback 목록 추가.
+- `up` 단계에서 이미 실행 중이지만 broken/stuck한 VM 처리 (pid kill → 재시도).
+
+검증: 위 개선을 반영한 `make bootstrap` 재실행 → 두 노드 모두 정상 완료 (2026-09-21).
+
 ### 과거 겪었던 그 외 문제 (재발 방지용 요약)
 
 - scp로 netplan YAML 전송 시 간헐적으로 파일이 손상됨(`Invalid YAML: aliases are not
