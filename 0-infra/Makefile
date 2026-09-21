@@ -31,6 +31,9 @@ SSH_OPTS    := -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o Co
 
 NODE1_IP    := 192.168.0.201
 NODE2_IP    := 192.168.0.202
+# clean 시 known_hosts 정리 대상 — 두 IP 모두 포함 (HISTORY.md §2)
+# NAT fallback: 192.168.64.x 대역 (node-1/node-2 NAT IP)
+NODE1_IP_FALLBACK := 192.168.64.5 192.168.64.24
 
 .PHONY: all pull up down status ip inventory clean $(NODES) \
         configure-network configure-network-node-1 configure-network-node-2 bridged-up \
@@ -235,6 +238,12 @@ down:
 	done
 
 ## 완전 삭제 (VM/디스크 모두 제거)
+## [개선] 삭제 시 known_hosts에서 관련 IP의 호스트 키도 자동 정리 —
+##  재부팅/재설치 시 "REMOTE HOST IDENTIFICATION HAS CHANGED" 오류 방지 (HISTORY.md §2).
 clean: down
 	-tart delete node-1
 	-tart delete node-2
+	@echo "[clean] known_hosts 정리 (노드 IP + NAT fallback)"; \
+	for ip in $(NODE1_IP) $(NODE2_IP) $(NODE1_IP_FALLBACK); do \
+		ssh-keygen -R $$ip >/dev/null 2>&1 || true; \
+	done
