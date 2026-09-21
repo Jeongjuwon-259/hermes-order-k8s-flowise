@@ -175,11 +175,16 @@ Tart 설치 (brew, 1회성 수동)
 ├── argocd-garmin-templates/             # garmin 프로젝트 전용 차트 (위 보일러플레이트에서 필요한 kind만 복사)
 │   └── chart/app/stable/ ...            # values.yaml 없음 — 값은 argocd-values/app/garmin-mcp-values.yaml이 유일한 소스
 │                                         # (지금 안 쓰는 hpa/destination-rule/sealed-secret도 제외)
+├── argocd-hello-world-templates/        # hello-world 샘플(nginx) 전용 차트 — 클러스터 정상 동작 확인용
+│   └── chart/app/stable/ ...            # deployment.yaml + service.yaml만 (httproute 등 불필요)
 ├── argocd-values/
 │   └── app/
-│       └── example-values.yaml          # 실제 앱 만들 때 {project}-values.yaml로 복사
-│                                         # 최상단에 project: <project명> 필드 필수
-│                                         # (ApplicationSet이 이 값으로 argocd-<project>-templates 경로를 조합)
+│       ├── example-values.yaml          # 실제 앱 만들 때 {project}-values.yaml로 복사
+│       │                                 # 최상단에 project: <project명> 필드 필수
+│       │                                 # (ApplicationSet이 이 값으로 argocd-<project>-templates 경로를 조합)
+│       ├── garmin-mcp-values.yaml
+│       └── hello-world.yaml             # 네임스페이스를 정확히 hello-world로 두려고
+│                                         # "-values" 접미사 없이 파일명을 지음 (basenameNormalized 규칙)
 └── applicationset.yaml                  # ⚠️ 초안, 미검증 — Git file generator로 argocd-values/app/*.yaml마다 Application 자동 생성
 ```
 

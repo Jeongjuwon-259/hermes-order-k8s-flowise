@@ -1,0 +1,33 @@
+# hello-world 샘플(nginx) 배포 값 — 클러스터 정상 동작(스케줄링/네트워킹) 확인용
+# argocd-hello-world-templates 차트에는 values.yaml이 없다 — 이 파일이 유일한 값 소스.
+#
+# 파일명이 {project}-values.yaml이 아니라 hello-world.yaml인 이유:
+# ApplicationSet이 Application 이름/네임스페이스를 {{.path.basenameNormalized}}
+# (확장자 뺀 파일명)로 만들기 때문에, 네임스페이스를 정확히 hello-world로 두려면
+# 파일명도 hello-world.yaml이어야 한다 ("-values" 접미사가 붙으면 네임스페이스도
+# hello-world-values가 되어버림).
+
+project: hello-world
+
+replicaCount: 2
+
+image:
+  repository: nginx
+  tag: stable
+  pullPolicy: IfNotPresent
+  pullSecret: ""
+
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30090
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+env: []

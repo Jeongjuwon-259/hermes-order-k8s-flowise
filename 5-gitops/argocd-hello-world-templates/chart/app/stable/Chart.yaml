@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hello-world
+description: hello-world 프로젝트 전용 차트 — 클러스터 정상 동작(스케줄링/네트워킹) 확인용 nginx 샘플
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

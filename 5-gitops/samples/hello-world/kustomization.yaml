@@ -1,8 +1,0 @@
-# 5-gitops/samples/hello-world/kustomization.yaml
-# 사용법: kubectl apply -k 5-gitops/samples/hello-world
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - namespace.yaml
-  - deployment.yaml
-  - service.yaml
