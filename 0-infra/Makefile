@@ -240,8 +240,9 @@ down:
 ## 완전 삭제 (VM/디스크 모두 제거)
 ## [개선] 삭제 시 known_hosts에서 관련 IP의 호스트 키도 자동 정리 —
 ##  재부팅/재설치 시 "REMOTE HOST IDENTIFICATION HAS CHANGED" 오류 방지 (HISTORY.md §2).
-## [개선] TART_HOME 전체 디렉토리 (VM/OCI 캐시/이미지)도 함께 삭제 —
-##  ~/.tart와 TART_HOME 모두 정리 (중복为防 하는 현상 방지).
+## [주의] TART_HOME 전체 삭제는 하지 않음 —tart pull로 다운로드한 공식 이미지 캐시가
+##  날아가서 bootstrap 시 매번 재다운로드하는 낭비가 발생함 (HISTORY.md §2).
+##  VM 관련 디렉토리(node-1/, node-2/, shared/)만 정리하고,shared/oci 및 image 캐시는 유지.
 clean: down
 	-tart delete node-1
 	-tart delete node-2
@@ -249,7 +250,6 @@ clean: down
 	for ip in $(NODE1_IP) $(NODE2_IP) $(NODE1_IP_FALLBACK); do \
 		ssh-keygen -R $$ip >/dev/null 2>&1 || true; \
 	done
-	@echo "[clean] TART_HOME=$(TART_HOME) 디렉토리 전체 삭제"; \
-	rm -rf $(TART_HOME)
-	@echo "[clean] ~/.tart 디렉토리 전체 삭제"; \
-	rm -rf ~/.tart
+	@echo "[clean] VM 디스크만 삭제 (TART_HOME=$(TART_HOME), 이미지 캐시 유지)"; \
+	rm -rf $(TART_HOME)/node-1 $(TART_HOME)/node-2 $(TART_HOME)/shared 2>/dev/null || true
+	@echo "[clean] ~/.tart 디렉토리는 유지 (공식 이미지 캐시 포함)"
