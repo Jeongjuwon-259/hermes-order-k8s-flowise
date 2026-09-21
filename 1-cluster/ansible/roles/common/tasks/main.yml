@@ -54,6 +54,13 @@
     path: /etc/containerd/config.toml
   register: containerd_config
 
+- name: /etc/containerd 디렉토리 생성 (패키지 설치만으론 없을 수 있음)
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    mode: "0755"
+  when: not containerd_config.stat.exists
+
 - name: containerd 기본 설정 생성
   ansible.builtin.shell: containerd config default | tee /etc/containerd/config.toml
   when: not containerd_config.stat.exists
