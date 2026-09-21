@@ -7,32 +7,32 @@
 기존에 Tart VM이 두 곳에 동시에 존재할 수 있었음:
 
 - `~/.tart` (Tart 기본 위치)
-- `/Users.blue/iac-project` (Makefile에서 `export TART_HOME`으로 지정한 위치)
+- `/Users/blue/iac-project` (Makefile에서 `export TART_HOME`으로 지정한 위치)
 
 둘 다 `tart list`에서 별도로 취급되어 `make clean`이 한 곳만 정리하고 다른 곳에 VM이 남아있는 문제가 발생함.
 
 ---
 
-## 1. 최종 설정: TART_HOME = /Users.blue/tart-home
+## 1. 최종 설정: TART_HOME = /Users/blue/tart-home
 
 Makefile, 문서 파일, 셸 명령어 등 모든 곳에서 통일:
 
 ```bash
 # Makefile (line 15)
-export TART_HOME ?= /Users.blue/tart-home
+export TART_HOME ?= /Users/blue/tart-home
 
 # 셸 환경 (bootstrap-and-deploy.sh)
-export TART_HOME=/Users.blue/tart-home
+export TART_HOME=/Users/blue/tart-home
 ```
 
-**중요**: `/Users.blue/tart-home` (셸 환경에서 `TART_HOME` 설정 필요)
+**중요**: `/Users/blue/tart-home` (셸 환경에서 `TART_HOME` 설정 필요)
 
 ---
 
 ## 2. 디렉토리 구조
 
 ```
-/Users.blue/tart-home/
+/Users/blue/tart-home/
 ├── vms/
 │   ├── node-1/
 │   │   ├── config.json
@@ -54,7 +54,7 @@ export TART_HOME=/Users.blue/tart-home
 
 ```bash
 # 1. 정상 tart list (TART_HOME이 설정된 상태)
-TART_HOME=/Users.blue/tart-home tart list
+TART_HOME=/Users/blue/tart-home tart list
 
 # 2. 기본 tart list (TART_HOME 미설정 → ~/.tart 조회)
 #    → VM이 표시되지 않음 (기존 ~/.tart 디렉토리 존재하면 OCI 이미지만 표시)
@@ -71,7 +71,7 @@ make -p | grep TART_HOME
 
 ```bash
 # 원인: TART_HOME이 기본 ~/.tart를 조회 중
-TART_HOME=/Users.blue/tart-home tart list  # ← 명시적 지정
+TART_HOME=/Users/blue/tart-home tart list  # ← 명시적 지정
 ```
 
 ### 4.2. `make clean`으로 VM 삭제 후 재구성은 반드시 `make bootstrap`
@@ -89,7 +89,7 @@ make bootstrap # up → fix-identity → configure-network → bridged-up → ve
 **확인 방법**:
 
 ```bash
-ls -la /Users.blue/tart-home/
+ls -la /Users/blue/tart-home/
 # 디렉토리가 없으면 Makefile에서 export 하므로 bootstrap이 새로 생성함
 ```
 
@@ -98,8 +98,8 @@ ls -la /Users.blue/tart-home/
 ## 5. Makefile 관전 사항
 
 - Makefile에서 `export TART_HOME`이 반드시 세션 전역에서 설정됨 (Makefile이 직접 export함).
-- 직접 명령어를 실행할 때 `TART_HOME=/Users.blue/tart-home` 명시 필요.
-- `TART_HOME`이 `/Users.blue/tart-home`로 반드시 입력되어야 함 (`.blue` 아님).
+- 직접 명령어를 실행할 때 `TART_HOME=/Users/blue/tart-home` 명시 필요.
+- `TART_HOME`이 `/Users/blue/tart-home`로 반드시 입력되어야 함 (`.blue` 아님).
 
 ---
 
@@ -130,4 +130,4 @@ make clean:
 - `tart ip`는 bridged+Ubuntu Server 조합에서 공식 버그 (cirruslabs/tart#460)
   → netplan 정적 IP로 해결.
 - `make bootstrap` 후 60초 대기 필수 (네트워크가 완전히 붙을 때까지).
-- TART_HOME이 기본값(`~/.tart`)과 달라서 VM을 확인하려면 반드시 `TART_HOME=/Users.blue/tart-home tart list` 실행 필요.
+- TART_HOME이 기본값(`~/.tart`)과 달라서 VM을 확인하려면 반드시 `TART_HOME=/Users/blue/tart-home tart list` 실행 필요.

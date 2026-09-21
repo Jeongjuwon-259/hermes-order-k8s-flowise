@@ -28,7 +28,7 @@ git log --oneline -3
 
 ```bash
 # 또는 수동으로 다음을 단계별 실행:
-export TART_HOME=/Users.blue/tart-home
+export TART_HOME=/Users/blue/tart-home
 cd 0-infra
 make clean    # VM 완전 삭제 (선택 사항, clean 상태라면 생략 가능)
 make bootstrap # up → fix-identity → configure-network → bridged-up → verify
