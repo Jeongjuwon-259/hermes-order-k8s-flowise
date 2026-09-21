@@ -1,0 +1,59 @@
+---
+# 5-gitops/ansible/roles/docker-install/tasks/main.yml
+# 노드(node-1, node-2)에 Docker 설치 및 서비스 기동
+
+- name: apt-get update (Ubuntu 기반)
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Docker prerequisites
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Download Docker GPG key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker APT repository
+  ansible.builtin.apt_repository:
+    repo: deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    state: present
+
+- name: Install Docker Engine
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Start and enable Docker service
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add admin user to docker group (sudo권한 없이 docker 실행용)
+  ansible.builtin.user:
+    name: "{{ ansible_user | default('admin') }}"
+    groups: docker
+    append: yes
+
+- name: Verify Docker installation
+  ansible.builtin.command: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Show Docker version
+  ansible.builtin.debug:
+    msg: "Docker {{ docker_version.stdout }} 설치 완료"

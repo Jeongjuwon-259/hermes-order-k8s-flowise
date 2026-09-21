@@ -1,0 +1,58 @@
+# 5-gitops/samples/gamin/namespace.yaml
+# gamin MCP Server — 네임스페이스
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gamin
+  labels:
+    app: gamin-mcp
+---
+# 5-gitops/samples/gamin/deployment.yaml
+# gamin MCP Server — 컨테이너 빌드/배포용 매니페스트
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gamin-mcp
+  namespace: gamin
+  labels:
+    app: gamin-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gamin-mcp
+  template:
+    metadata:
+      labels:
+        app: gamin-mcp
+    spec:
+      containers:
+        - name: gamin-mcp
+          image: gamin_mcp:latest
+          imagePullPolicy: Never  # 로컬 빌드 이미지 (Minikube/kind 등)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          env:
+            # Garmin Connect 인증 토큰 (Sealed Secrets로 처리 권장)
+            - name: GARMIN_TOKEN_DIR
+              value: "/root/.garminconnect"
+---
+# 5-gitops/samples/gamin/service.yaml
+# ClusterIP — Cluster 내부에서 MCP 서버로 접근 (필요시 NodePort로 변경 가능)
+apiVersion: v1
+kind: Service
+metadata:
+  name: gamin-mcp
+  namespace: gamin
+spec:
+  type: ClusterIP
+  selector:
+    app: gamin-mcp
+  ports:
+    - port: 8080
+      targetPort: 8080
