@@ -2,6 +2,11 @@
 # {project}-values.yaml로 저장 (예: flowise-values.yaml)
 # 참고: helm.sh 표준 필드는 자유롭게 확장 가능, 여기 없는 값은 각 템플릿에서 default로 처리됨
 
+# 필수 — ApplicationSet(Git file generator)이 이 값으로 차트 경로를 조합한다:
+#   5-gitops/argocd-{{.project}}-templates/chart/app/stable
+# 즉 project: example이면 5-gitops/argocd-example-templates/가 있어야 한다.
+project: example
+
 replicaCount: 1
 
 image:

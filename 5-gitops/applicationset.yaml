@@ -1,8 +1,11 @@
 # ⚠️ 초안 — 실기 검증 안 됨. ArgoCD 버전에 따라 Git file generator 템플릿 문법이
-# 조금씩 다를 수 있어서, 실제 앱(예: flowise-values.yaml) 추가해서 sync 확인 전까지 신뢰하지 말 것.
+# 조금씩 다를 수 있어서, 실제 앱(예: garmin-mcp-values.yaml) 추가해서 sync 확인 전까지 신뢰하지 말 것.
 #
 # argocd-values/app/*.yaml 파일이 하나 생길 때마다 ArgoCD Application을 자동 생성.
-# 차트(argocd-templates/chart/app/stable) + 매칭되는 값 파일을 조합해서 배포.
+# 차트는 프로젝트별로 분리(5-gitops/argocd-<project>-templates/chart/app/stable, 예:
+# argocd-garmin-templates)되어 있으므로, 값 파일 최상단에 `project: <project명>` 필드를
+# 반드시 넣어야 한다 — Git file generator가 파일 내용을 그대로 템플릿 파라미터로 노출하므로
+# {{.project}}로 차트 경로를 조합한다.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -23,7 +26,7 @@ spec:
       sources:
         - repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
           targetRevision: main
-          path: 5-gitops/argocd-templates/chart/app/stable
+          path: '5-gitops/argocd-{{.project}}-templates/chart/app/stable'
           helm:
             valueFiles:
               - $values/5-gitops/argocd-values/app/{{.path.basename}}

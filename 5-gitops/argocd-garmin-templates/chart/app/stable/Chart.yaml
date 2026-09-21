@@ -1,0 +1,6 @@
+apiVersion: v2
+name: garmin-mcp
+description: garmin 프로젝트 전용 차트 — Garmin Connect MCP 서버 (Gateway API HTTPRoute + Istio DestinationRule + SealedSecret 포함)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

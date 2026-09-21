@@ -40,8 +40,9 @@ ssh admin@192.168.0.201
 cd /path/to/git-clone
 docker build -t garmin_mcp:latest -f 5-gitops/argocd-defaults/Dockerfile_garmin_mcp .
 
-# 네임스페이스 + deployment + service 적용
-kubectl apply -f 5-gitops/samples/garmin/
+# 배포는 수동 kubectl apply가 아니라 ArgoCD ApplicationSet을 통해 이루어진다.
+# 5-gitops/argocd-values/app/garmin-mcp-values.yaml + 5-gitops/argocd-garmin-templates/
+# 조합을 5-gitops/applicationset.yaml이 자동으로 Application화해서 sync한다.
 ```
 
 ---
@@ -62,7 +63,7 @@ kubectl apply -f 5-gitops/samples/garmin/
 
 ## 4. 우선 배포 대상 — garmin MCP Python 서버
 
-- 현재 GitOps 구조(ApplicationSet + Helm chart, `5-gitops/argocd-templates`, `5-gitops/argocd-values`)를 그대로 활용하면 임의의 MCP Python 서버도 ArgoCD 배포까지 완성할 수 있을 것으로 판단.
+- 현재 GitOps 구조(ApplicationSet + Helm chart, `5-gitops/argocd-<project>-templates`, `5-gitops/argocd-values`)를 그대로 활용하면 임의의 MCP Python 서버도 ArgoCD 배포까지 완성할 수 있을 것으로 판단. garmin은 `5-gitops/argocd-garmin-templates`.
 - **1차 대상 소스:** https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp.git
 - **네임스페이스:** `garmin`
 - **프로젝트명:** `mcp` (fully qualified: `garmin-mcp`, 이미지명: `garmin_mcp`)

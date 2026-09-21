@@ -1,0 +1,43 @@
+# garmin MCP 서버 배포 값 — argocd-defaults/README.md §4 참고
+# ⚠️ 초안 — 아직 sync 검증 안 됨
+
+project: garmin
+
+replicaCount: 1
+
+image:
+  repository: garmin_mcp
+  tag: latest
+  pullSecret: ""
+
+service:
+  port: 8080
+
+route:
+  enabled: false
+  hostnames: []
+
+destinationRule:
+  enabled: false
+  trafficPolicy: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  - name: GARMIN_TOKEN_DIR
+    value: "/root/.garminconnect"
+
+# garmin 인증 관련 SealedSecret은 이번 단계에서 제외 (argocd-defaults/README.md §4)
+sealedSecrets: []

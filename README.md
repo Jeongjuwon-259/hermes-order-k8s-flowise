@@ -155,26 +155,30 @@ Tart 설치 (brew, 1회성 수동)
 
 ## 7. `5-gitops/` — ArgoCD Application 정의
 
-과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 가져오되, 최신 GitOps/K8s 트렌드 검토 후 세부는 갱신했다:
+과거 프로젝트에서 쓰던 `argocd-templates`(공유 차트) / `argocd-values`(앱별 값) 분리 구조를 가져오되, 최신 GitOps/K8s 트렌드 검토 후 세부는 갱신했다. 차트는 프로젝트마다 `argocd-<project>-templates/`로 따로 둔다 — `argocd-project-templates/`가 새 프로젝트를 시작할 때 복사하는 보일러플레이트이고, `argocd-garmin-templates/`가 그 예:
 
 ```
 5-gitops/
-├── argocd-templates/
+├── argocd-project-templates/            # 새 프로젝트 시작 시 argocd-<project>-templates/로 복사하는 보일러플레이트
 │   └── chart/
-│       └── app/                         # 자체 개발 앱(Flowise 등) 공용 차트
+│       └── app/
 │           └── stable/
 │               ├── Chart.yaml
 │               ├── values.yaml          # 기본값 (앱별 값은 argocd-values에서 override)
-│               └── templates/
+│               └── templates/           # kind별로 파일 분리 — 한 파일에 여러 kind를 합치지 않는다
 │                   ├── deployment.yaml
 │                   ├── service.yaml
 │                   ├── hpa.yaml
 │                   ├── httproute.yaml         # Gateway API HTTPRoute (VirtualService 대체)
 │                   ├── destination-rule.yaml  # Istio 자체 CRD 유지 (세부 트래픽 정책용)
 │                   └── sealed-secret.yaml     # secret-docker.yaml/project-secret.yaml(평문) 대체
+├── argocd-garmin-templates/             # garmin 프로젝트 전용 차트 (위 보일러플레이트에서 복사)
+│   └── chart/app/stable/ ...            # 구조 동일, values.yaml만 프로젝트에 맞게 채움
 ├── argocd-values/
 │   └── app/
 │       └── example-values.yaml          # 실제 앱 만들 때 {project}-values.yaml로 복사
+│                                         # 최상단에 project: <project명> 필드 필수
+│                                         # (ApplicationSet이 이 값으로 argocd-<project>-templates 경로를 조합)
 └── applicationset.yaml                  # ⚠️ 초안, 미검증 — Git file generator로 argocd-values/app/*.yaml마다 Application 자동 생성
 ```
 

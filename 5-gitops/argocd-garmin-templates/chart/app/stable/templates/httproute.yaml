@@ -1,0 +1,18 @@
+# Gateway API HTTPRoute — 옛 Istio VirtualService를 대체 (README.md §3, §10 결정 로그 참고)
+# 1-cluster/ansible/roles/istio가 미리 만들어둔 공유 Gateway(istio-system/shared-gateway)에 붙는다
+{{- if .Values.route.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  parentRefs:
+    - name: shared-gateway
+      namespace: istio-system
+  hostnames:
+    {{- toYaml .Values.route.hostnames | nindent 4 }}
+  rules:
+    - backendRefs:
+        - name: {{ .Release.Name }}
+          port: {{ .Values.service.port | default 8080 }}
+{{- end }}
