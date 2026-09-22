@@ -1,35 +1,86 @@
 ---
 # 5-gitops/ansible/garmin-mcp-build.yml
-# 노드(node-1)에서 garmin-mcp Docker 이미지 빌드
+# node-1에서 garmin-mcp 이미지 빌드 (템플릿 이슈 수정)
 
-- name: Build garmin-mcp Docker image
+- name: Build garmin-mcp Docker image on node-1
   hosts: node-1
   become: yes
   gather_facts: no
+  vars:
+    build_dir: /opt/garmin-mcp
+    local_source_dir: /private/tmp/hermes-order-k8s-flowise/5-gitops/argocd-defaults
+    tarball_path: /tmp/garmin-mcp-latest.tar
 
   tasks:
-    - name: Clone garmin-connect-mcp source
-      ansible.builtin.git:
-        repo: https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp.git
-        dest: /opt/garmin-mcp
-        depth: 1
-        force: yes
+    - name: Remove existing garmin-mcp:latest image on node-1 (clean rebuild)
+      ansible.builtin.command:
+        cmd: docker rmi -f garmin-mcp:latest
+      register: rmi_result
+      failed_when: false
+      changed_when: "'No such image' not in rmi_result.stderr"
+
+    - name: Ensure build directory exists
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        owner: admin
+        group: admin
+        mode: "0755"
+
+    - name: Copy source code to node-1
+      ansible.builtin.copy:
+        src: "{{ local_source_dir }}/"
+        dest: "{{ build_dir }}/"
+        owner: admin
+        group: admin
+        mode: preserve
+
+    - name: Ensure Dockerfile exists (copy Dockerfile_garmin_mcp as Dockerfile)
+      ansible.builtin.copy:
+        src: "{{ local_source_dir }}/Dockerfile_garmin_mcp"
+        dest: "{{ build_dir }}/Dockerfile"
+        owner: admin
+        group: admin
+        mode: "0644"
 
     - name: Build garmin-mcp Docker image
       ansible.builtin.command:
-        cmd: docker build -t garmin-mcp:latest /opt/garmin-mcp
+        cmd: docker build -t garmin-mcp:latest {{ build_dir }}
       register: build_result
       changed_when: build_result.rc == 0
+      timeout: 600
 
     - name: Show build result
       ansible.builtin.debug:
         var: build_result.stdout_lines
 
-    - name: Verify garmin-mcp image
+    - name: Verify garmin-mcp image on node-1
       ansible.builtin.command: docker images garmin-mcp
       register: image_result
       changed_when: false
 
-    - name: Show final image
+    - name: Show final image on node-1
       ansible.builtin.debug:
         var: image_result.stdout
+
+    - name: Save garmin-mcp image to tarball on node-1
+      ansible.builtin.command:
+        cmd: docker save garmin-mcp:latest -o {{ tarball_path }}
+      register: save_result
+      changed_when: save_result.rc == 0
+
+    - name: Fix tarball ownership for scp
+      ansible.builtin.file:
+        path: "{{ tarball_path }}"
+        owner: admin
+        group: admin
+        mode: "0644"
+
+    - name: Show tarball size
+      ansible.builtin.stat:
+        path: "{{ tarball_path }}"
+      register: tarball_stat
+
+    - name: Show tarball size
+      ansible.builtin.debug:
+        msg: "Tarball size: {{ (tarball_stat.stat.size / 1024 / 1024) | round(1) }} MB"

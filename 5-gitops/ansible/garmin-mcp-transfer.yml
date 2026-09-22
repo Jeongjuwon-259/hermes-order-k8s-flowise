@@ -1,0 +1,101 @@
+---
+# 5-gitops/ansible/garmin-mcp-transfer.yml
+# node-1 → controller → node-2로 이미지 전송 및 로드
+
+- name: Transfer tarball from node-1 to controller
+  hosts: localhost
+  gather_facts: no
+  connection: local
+  vars:
+    tarball_path: /tmp/garmin-mcp-latest.tar
+    local_tarball_path: /private/tmp/hermes-order-k8s-flowise/5-gitops/tmp/garmin-mcp-latest.tar
+
+  tasks:
+    - name: Ensure local tmp directory exists
+      ansible.builtin.file:
+        path: /private/tmp/hermes-order-k8s-flowise/5-gitops/tmp
+        state: directory
+
+    - name: Download tarball from node-1 to controller (scp)
+      ansible.builtin.shell:
+        cmd: >
+          sshpass -p 'admin' scp -o StrictHostKeyChecking=no
+          admin@192.168.0.201:{{ tarball_path }} {{ local_tarball_path }}
+      register: scp_download
+      changed_when: scp_download.rc == 0
+
+    - name: Show download result
+      ansible.builtin.debug:
+        var: scp_download.stdout_lines
+
+    - name: Verify local tarball
+      ansible.builtin.stat:
+        path: "{{ local_tarball_path }}"
+      register: local_tarball_stat
+
+    - name: Show local tarball size
+      ansible.builtin.debug:
+        msg: "Local tarball size: {{ (local_tarball_stat.stat.size / 1024 / 1024) | round(1) }} MB"
+
+    - name: Upload tarball from controller to node-2 (scp)
+      ansible.builtin.shell:
+        cmd: >
+          sshpass -p 'admin' scp -o StrictHostKeyChecking=no
+          {{ local_tarball_path }} admin@192.168.0.202:{{ tarball_path }}
+      register: scp_upload
+      changed_when: scp_upload.rc == 0
+
+    - name: Show upload result
+      ansible.builtin.debug:
+        var: scp_upload.stdout_lines
+
+    - name: Cleanup local tarball
+      ansible.builtin.file:
+        path: "{{ local_tarball_path }}"
+        state: absent
+
+- name: Load garmin-mcp image on node-2
+  hosts: node-2
+  become: yes
+  gather_facts: no
+  vars:
+    tarball_path: /tmp/garmin-mcp-latest.tar
+
+  tasks:
+    - name: Remove existing garmin-mcp:latest image on node-2 (clean load)
+      ansible.builtin.command:
+        cmd: docker rmi -f garmin-mcp:latest
+      register: rmi_result
+      failed_when: false
+      changed_when: "'No such image' not in rmi_result.stderr"
+
+    - name: Load garmin-mcp image on node-2
+      ansible.builtin.command:
+        cmd: docker load -i {{ tarball_path }}
+      register: load_result
+      changed_when: load_result.rc == 0
+      timeout: 120
+
+    - name: Show load result
+      ansible.builtin.debug:
+        var: load_result.stdout
+
+    - name: Verify garmin-mcp image on node-2
+      ansible.builtin.command: docker images garmin-mcp
+      register: image_result
+      changed_when: false
+
+    - name: Show final image on node-2
+      ansible.builtin.debug:
+        var: image_result.stdout
+
+    - name: Cleanup tarball on node-2
+      ansible.builtin.file:
+        path: "{{ tarball_path }}"
+        state: absent
+
+    - name: Cleanup tarball on node-1
+      ansible.builtin.file:
+        path: "{{ tarball_path }}"
+        state: absent
+      delegate_to: node-1
