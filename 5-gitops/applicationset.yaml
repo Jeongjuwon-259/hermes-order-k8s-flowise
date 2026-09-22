@@ -25,7 +25,7 @@ spec:
         path: 5-gitops/argocd-hello-world-templates/chart/app/stable
         helm:
           valueFiles:
-            - 5-gitops/argocd-values/app/hello-world.yaml
+            - ../../../../argocd-values/app/hello-world.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: hello-world
@@ -59,7 +59,7 @@ spec:
         path: 5-gitops/argocd-garmin-templates/chart/app/stable
         helm:
           valueFiles:
-            - 5-gitops/argocd-values/app/garmin-mcp-values.yaml
+            - ../../../../argocd-values/app/garmin-mcp-values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: garmin
