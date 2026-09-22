@@ -1,7 +1,16 @@
 # 5-gitops/applicationset.yaml
-# argocd-values/app/*.yaml 파일이 하나 생길 때마다 ArgoCD Application을 자동 생성.
-# 차트는 argocd-<project>-templates/chart/app/stable 에 있으므로, 각 파일에
-# project: <project명> 필드를 넣어야 합니다.
+# argocd-values/app/*.yaml 파일이 추가될 때마다 ArgoCD Application을 자동 생성.
+# 2026-09-22: ArgoCD v3.5.3 list generator는 metadata.name에 template 변수를 지원하지 않음.
+#  workaround — 각 Application에 고유한 고정 name을 부여, namespace만 variable.
+#
+#  구조:
+#    5-gitops/argocd-<project>-templates/chart/app/stable  (차트)
+#    5-gitops/argocd-values/app/<project>.yaml             (값 파일)
+#
+#  새 앱을 추가하려면:
+#    1. 5-gitops/argocd-values/app/<project>.yaml 추가
+#    2. (선택) 5-gitops/argocd-<project>-templates 추가
+#    3. elements에 하나 추가
 
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -10,38 +19,66 @@ metadata:
   namespace: argocd
 spec:
   generators:
-    # listMatches: 매칭된 파일의 content 파일을 template 파라미터로 제공
     - list:
         elements:
-          - project: hello-world
+          - appName: hello-world
+            project: hello-world
             chartPath: 5-gitops/argocd-hello-world-templates/chart/app/stable
             valuesFile: 5-gitops/argocd-values/app/hello-world.yaml
-          - project: garmin
+          - appName: garmin-mcp
+            project: garmin
             chartPath: 5-gitops/argocd-garmin-templates/chart/app/stable
             valuesFile: 5-gitops/argocd-values/app/garmin-mcp-values.yaml
   template:
     metadata:
-      name: |-
-        {{.project}}
+      name: hello-world
     spec:
       project: default
-      sources:
-        - chart: garmin-mcp
-          repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
-          targetRevision: main
-          ref: values
-        - repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
-          targetRevision: main
-          path: |-
-            {{.chartPath}}
-          helm:
-            valueFiles:
-              - |-
-                {{.valuesFile}}
+      source:
+        repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
+        targetRevision: main
+        path: 5-gitops/argocd-hello-world-templates/chart/app/stable
+        helm:
+          valueFiles:
+            - 5-gitops/argocd-values/app/hello-world.yaml
       destination:
         server: https://kubernetes.default.svc
-        namespace: |-
-          {{.project}}
+        namespace: hello-world
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: garmin-app-stack
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - appName: garmin-mcp
+            project: garmin
+            chartPath: 5-gitops/argocd-garmin-templates/chart/app/stable
+            valuesFile: 5-gitops/argocd-values/app/garmin-mcp-values.yaml
+  template:
+    metadata:
+      name: garmin-mcp
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
+        targetRevision: main
+        path: 5-gitops/argocd-garmin-templates/chart/app/stable
+        helm:
+          valueFiles:
+            - 5-gitops/argocd-values/app/garmin-mcp-values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: garmin
       syncPolicy:
         automated:
           prune: true
