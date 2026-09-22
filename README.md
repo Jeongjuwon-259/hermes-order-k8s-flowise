@@ -178,10 +178,11 @@ Tart 설치 (brew, 1회성 수동)
 ├── argocd-hello-world-templates/        # hello-world 샘플(nginx) 전용 차트 — 클러스터 정상 동작 확인용
 │   └── chart/app/stable/ ...            # deployment.yaml + service.yaml만 (httproute 등 불필요)
 ├── argocd-values/
+│   ├── example-values.yaml               # 실제 앱 만들 때 app/{project}-values.yaml로 복사
+│   │                                      # 최상단에 project: <project명> 필드 필수
+│   │                                      # (ApplicationSet이 이 값으로 argocd-<project>-templates 경로를 조합)
+│   │                                      # app/ 밖에 둠 — app/*.yaml은 전부 Application으로 생성되기 때문
 │   └── app/
-│       ├── example-values.yaml          # 실제 앱 만들 때 {project}-values.yaml로 복사
-│       │                                 # 최상단에 project: <project명> 필드 필수
-│       │                                 # (ApplicationSet이 이 값으로 argocd-<project>-templates 경로를 조합)
 │       ├── garmin-mcp-values.yaml
 │       └── hello-world.yaml             # 네임스페이스를 정확히 hello-world로 두려고
 │                                         # "-values" 접미사 없이 파일명을 지음 (basenameNormalized 규칙)
