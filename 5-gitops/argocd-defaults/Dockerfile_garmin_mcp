@@ -8,14 +8,11 @@ RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# 의존성만 먼저 복사 (레이어 캐시 활용)
-COPY pyproject.toml ./
+# 소스 전체 복사 (editable install은 src/ 트리가 있어야 동작함)
+COPY . .
 
 # hatchling 빌드 시스템 + editable 설치 (pyproject.toml 호환)
 RUN uv pip install --system -e .
-
-# 소스 전체 복사
-COPY . .
 
 # Garmin Connect 인증 정보 (도커 환경용 Base64 토큰 지원)
 ENV GARMIN_TOKEN_DIR=/root/.garminconnect
