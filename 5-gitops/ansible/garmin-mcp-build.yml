@@ -1,0 +1,35 @@
+---
+# 5-gitops/ansible/garmin-mcp-build.yml
+# 노드(node-1)에서 garmin-mcp Docker 이미지 빌드
+
+- name: Build garmin-mcp Docker image
+  hosts: node-1
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Clone garmin-connect-mcp source
+      ansible.builtin.git:
+        repo: https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp.git
+        dest: /opt/garmin-mcp
+        depth: 1
+        force: yes
+
+    - name: Build garmin-mcp Docker image
+      ansible.builtin.command:
+        cmd: docker build -t garmin-mcp:latest /opt/garmin-mcp
+      register: build_result
+      changed_when: build_result.rc == 0
+
+    - name: Show build result
+      ansible.builtin.debug:
+        var: build_result.stdout_lines
+
+    - name: Verify garmin-mcp image
+      ansible.builtin.command: docker images garmin-mcp
+      register: image_result
+      changed_when: false
+
+    - name: Show final image
+      ansible.builtin.debug:
+        var: image_result.stdout
