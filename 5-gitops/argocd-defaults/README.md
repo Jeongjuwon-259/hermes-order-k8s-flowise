@@ -91,6 +91,24 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 
 ---
 
+## 6. ApplicationSet 적용 (마스터 노드)
+
+- `5-gitops/applicationset.yaml`을 클러스터에 넣는 일회성 부트스트랩. 이후로는 `argocd-values/app/*.yaml`
+  파일만 git에 추가하면 ApplicationSet이 Application을 자동 생성 — 앱마다 `argocd app create`를 CLI로
+  따로 안 해도 됨.
+- **개선점:** `/etc/kubernetes/admin.conf`가 root 소유라 `admin` 계정으로 kubectl을 바로 쓰면
+  `permission denied`가 난다. `kubeconfig-setup` role이 admin.conf를 `~/.kube/config`로 복사해서
+  이후 sudo/`--kubeconfig=` 없이 kubectl이 되게 해준다.
+- **role:** `5-gitops/ansible/roles/kubeconfig-setup`, `5-gitops/ansible/roles/applicationset-apply`
+- **playbook:** `5-gitops/ansible/applicationset-apply-playbook.yml` (대상: `control_plane`)
+
+```bash
+cd 5-gitops/ansible
+ansible-playbook applicationset-apply-playbook.yml
+```
+
+---
+
 ## 다음 단계 (제안)
 
 1. `hermes-garmin-connect-mcp` 저장소의 Dockerfile 유무 확인

@@ -1,0 +1,14 @@
+---
+# 5-gitops/ansible/applicationset-apply-playbook.yml
+# 마스터 노드(control_plane)에서 kubeconfig 셋업 + ApplicationSet 적용
+#
+# 실행:
+#   cd 5-gitops/ansible
+#   ansible-playbook applicationset-apply-playbook.yml
+
+- name: Setup kubeconfig and apply ApplicationSet on control plane node
+  hosts: control_plane
+  become: yes
+  roles:
+    - kubeconfig-setup
+    - applicationset-apply

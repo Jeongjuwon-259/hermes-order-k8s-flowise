@@ -1,0 +1,43 @@
+---
+# 5-gitops/ansible/roles/kubeconfig-setup/tasks/main.yml
+# 개선점: /etc/kubernetes/admin.conf는 root 소유라 admin 계정이 kubectl을 바로 못 쓴다
+# (sudo 없이 실행하면 permission denied). ansible_user 홈에 kubeconfig를 복사해서
+# 매번 --kubeconfig=/etc/kubernetes/admin.conf나 sudo 없이 kubectl이 되게 한다.
+
+- name: /etc/kubernetes/admin.conf 존재 확인
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: admin_conf_stat
+
+- name: admin.conf가 없으면 중단 (control_plane에서만 존재)
+  ansible.builtin.fail:
+    msg: "/etc/kubernetes/admin.conf가 없음 — control_plane 노드에서만 실행"
+  when: not admin_conf_stat.stat.exists
+
+- name: "{{ ansible_user }} 홈에 .kube 디렉터리 생성"
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user }}/.kube"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0700"
+
+- name: admin.conf를 유저 홈으로 복사 + 소유권 변경
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ ansible_user }}/.kube/config"
+    remote_src: yes
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+
+- name: kubectl 동작 확인 (sudo 없이)
+  ansible.builtin.command: kubectl get nodes
+  become: yes
+  become_user: "{{ ansible_user }}"
+  register: kubectl_check
+  changed_when: false
+
+- name: kubectl 확인 결과 출력
+  ansible.builtin.debug:
+    var: kubectl_check.stdout_lines

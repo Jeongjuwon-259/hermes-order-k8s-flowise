@@ -1,0 +1,41 @@
+---
+# 5-gitops/ansible/roles/applicationset-apply/tasks/main.yml
+# 5-gitops/applicationset.yaml을 마스터 노드(control_plane)에 적용 — 일회성 부트스트랩.
+# 이후 argocd-values/app/*.yaml만 추가하면 ApplicationSet이 Application을 자동 생성한다.
+
+- name: ApplicationSet 매니페스트 적용 (GitHub raw, public repo라 인증 불필요)
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f
+    https://raw.githubusercontent.com/{{ applicationset_repo }}/{{ applicationset_branch }}/5-gitops/applicationset.yaml
+  register: applicationset_apply
+  changed_when: "'unchanged' not in applicationset_apply.stdout"
+
+- name: 적용 결과 출력
+  ansible.builtin.debug:
+    var: applicationset_apply.stdout_lines
+
+- name: ApplicationSet 생성 대기 (git generator가 Application을 만들 시간)
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: ApplicationSet 상태 확인
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    -n argocd get applicationset app-stack
+  register: applicationset_status
+  changed_when: false
+
+- name: ApplicationSet 상태 출력
+  ansible.builtin.debug:
+    var: applicationset_status.stdout_lines
+
+- name: 생성된 Application 목록 확인
+  ansible.builtin.command: >
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf
+    -n argocd get applications
+  register: applications_status
+  changed_when: false
+
+- name: 생성된 Application 목록 출력
+  ansible.builtin.debug:
+    var: applications_status.stdout_lines
