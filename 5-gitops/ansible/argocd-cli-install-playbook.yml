@@ -1,0 +1,13 @@
+---
+# 5-gitops/ansible/argocd-cli-install-playbook.yml
+# 마스터 노드(node-1, control_plane)에 argocd CLI 설치
+#
+# 실행:
+#   cd 5-gitops/ansible
+#   ansible-playbook argocd-cli-install-playbook.yml
+
+- name: Install argocd CLI on control plane node
+  hosts: control_plane
+  become: yes
+  roles:
+    - argocd-cli-install

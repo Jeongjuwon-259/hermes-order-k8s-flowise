@@ -1,0 +1,39 @@
+---
+# 5-gitops/ansible/roles/argocd-cli-install/tasks/main.yml
+# 마스터 노드(node-1, control_plane)에 argocd CLI 설치
+# 서버는 1-cluster/ansible/roles/argocd가 이미 설치함 — 여기는 CLI 바이너리만 다룬다
+
+- name: 아키텍처를 argocd 릴리스 파일명 규칙(amd64/arm64)으로 매핑
+  ansible.builtin.set_fact:
+    argocd_cli_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: 설치된 argocd CLI 버전 확인 (없으면 실패해도 무시)
+  ansible.builtin.command: argocd version --client --short
+  register: argocd_cli_current
+  changed_when: false
+  failed_when: false
+
+- name: 최신 argocd CLI 바이너리 다운로드 (linux-{{ argocd_cli_arch }})
+  ansible.builtin.get_url:
+    url: "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-{{ argocd_cli_arch }}"
+    dest: /usr/local/bin/argocd
+    mode: "0755"
+    force: true
+  when: argocd_cli_current.rc != 0
+
+- name: argocd CLI 설치 확인
+  ansible.builtin.command: argocd version --client --short
+  register: argocd_cli_version
+  changed_when: false
+
+- name: argocd CLI 버전 출력
+  ansible.builtin.debug:
+    msg: "{{ argocd_cli_version.stdout }}"
+
+- name: argocd-server NodePort로 로그인 안내 (수동 실행 필요 — 비밀번호는 initial-admin-secret)
+  ansible.builtin.debug:
+    msg: >-
+      로그인: argocd login {{ ansible_default_ipv4.address | default(ansible_host) }}:{{ argocd_nodeport | default(30080) }}
+      --username admin --insecure --grpc-web
+      (초기 비밀번호: kubectl -n argocd get secret argocd-initial-admin-secret
+      -o jsonpath="{.data.password}" | base64 -d)

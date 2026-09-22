@@ -72,6 +72,25 @@ docker build -t garmin_mcp:latest -f 5-gitops/argocd-defaults/Dockerfile_garmin_
 
 ---
 
+## 5. ArgoCD CLI 설치 (마스터 노드)
+
+- ArgoCD 서버 자체는 `1-cluster/ansible/roles/argocd`가 이미 설치함 — 여기는 `argocd` CLI 바이너리만 다룬다.
+- **role:** `5-gitops/ansible/roles/argocd-cli-install`
+- **playbook:** `5-gitops/ansible/argocd-cli-install-playbook.yml` (대상: `control_plane` 그룹, 즉 node-1)
+- 아키텍처(amd64/arm64)를 자동 감지해서 GitHub 최신 릴리스 바이너리를 `/usr/local/bin/argocd`에 설치, 이미 설치돼 있으면 재다운로드하지 않음.
+
+```bash
+cd 5-gitops/ansible
+ansible-playbook argocd-cli-install-playbook.yml
+
+# 설치 후 로그인 (마스터 노드에서)
+argocd login <node-1 IP>:30080 --username admin --insecure --grpc-web
+# 초기 비밀번호
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+---
+
 ## 다음 단계 (제안)
 
 1. `hermes-garmin-connect-mcp` 저장소의 Dockerfile 유무 확인
