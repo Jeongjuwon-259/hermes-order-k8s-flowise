@@ -12,9 +12,9 @@
     tarball_path: /tmp/garmin-mcp-latest.tar
 
   tasks:
-    - name: Remove existing garmin-mcp:latest image on node-1 (clean rebuild)
+    - name: Remove existing garmin_mcp:latest image on node-1 (clean rebuild)
       ansible.builtin.command:
-        cmd: docker rmi -f garmin-mcp:latest
+        cmd: docker rmi -f garmin_mcp:latest
       register: rmi_result
       failed_when: false
       changed_when: "'No such image' not in rmi_result.stderr"
@@ -43,9 +43,9 @@
         group: admin
         mode: "0644"
 
-    - name: Build garmin-mcp Docker image
+    - name: Build garmin_mcp Docker image
       ansible.builtin.command:
-        cmd: docker build -t garmin-mcp:latest {{ build_dir }}
+        cmd: docker build -t garmin_mcp:latest {{ build_dir }}
       register: build_result
       changed_when: build_result.rc == 0
       timeout: 600
@@ -54,8 +54,8 @@
       ansible.builtin.debug:
         var: build_result.stdout_lines
 
-    - name: Verify garmin-mcp image on node-1
-      ansible.builtin.command: docker images garmin-mcp
+    - name: Verify garmin_mcp image on node-1
+      ansible.builtin.command: docker images garmin_mcp
       register: image_result
       changed_when: false
 
@@ -63,9 +63,9 @@
       ansible.builtin.debug:
         var: image_result.stdout
 
-    - name: Save garmin-mcp image to tarball on node-1
+    - name: Save garmin_mcp image to tarball on node-1
       ansible.builtin.command:
-        cmd: docker save garmin-mcp:latest -o {{ tarball_path }}
+        cmd: docker save garmin_mcp:latest -o {{ tarball_path }}
       register: save_result
       changed_when: save_result.rc == 0
 
