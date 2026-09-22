@@ -1,11 +1,8 @@
-# ⚠️ 초안 — 실기 검증 안 됨. ArgoCD 버전에 따라 Git file generator 템플릿 문법이
-# 조금씩 다를 수 있어서, 실제 앱(예: garmin-mcp-values.yaml) 추가해서 sync 확인 전까지 신뢰하지 말 것.
-#
+# 5-gitops/applicationset.yaml
 # argocd-values/app/*.yaml 파일이 하나 생길 때마다 ArgoCD Application을 자동 생성.
-# 차트는 프로젝트별로 분리(5-gitops/argocd-<project>-templates/chart/app/stable, 예:
-# argocd-garmin-templates)되어 있으므로, 값 파일 최상단에 `project: <project명>` 필드를
-# 반드시 넣어야 한다 — Git file generator가 파일 내용을 그대로 템플릿 파라미터로 노출하므로
-# {{.project}}로 차트 경로를 조합한다.
+# 차트는 argocd-<project>-templates/chart/app/stable 에 있으므로, 각 파일에
+# project: <project명> 필드를 넣어야 합니다.
+
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -13,29 +10,38 @@ metadata:
   namespace: argocd
 spec:
   generators:
-    - git:
-        repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
-        revision: main
-        files:
-          - path: "5-gitops/argocd-values/app/*.yaml"
+    # listMatches: 매칭된 파일의 content 파일을 template 파라미터로 제공
+    - list:
+        elements:
+          - project: hello-world
+            chartPath: 5-gitops/argocd-hello-world-templates/chart/app/stable
+            valuesFile: 5-gitops/argocd-values/app/hello-world.yaml
+          - project: garmin
+            chartPath: 5-gitops/argocd-garmin-templates/chart/app/stable
+            valuesFile: 5-gitops/argocd-values/app/garmin-mcp-values.yaml
   template:
     metadata:
-      name: '{{.path.basenameNormalized}}'
+      name: |-
+        {{.project}}
     spec:
       project: default
       sources:
-        - repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
-          targetRevision: main
-          path: '5-gitops/argocd-{{.project}}-templates/chart/app/stable'
-          helm:
-            valueFiles:
-              - $values/5-gitops/argocd-values/app/{{.path.basename}}
-        - repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
+        - chart: garmin-mcp
+          repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
           targetRevision: main
           ref: values
+        - repoURL: https://github.com/Jeongjuwon-259/hermes-order-k8s-flowise.git
+          targetRevision: main
+          path: |-
+            {{.chartPath}}
+          helm:
+            valueFiles:
+              - |-
+                {{.valuesFile}}
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{.path.basenameNormalized}}'
+        namespace: |-
+          {{.project}}
       syncPolicy:
         automated:
           prune: true
