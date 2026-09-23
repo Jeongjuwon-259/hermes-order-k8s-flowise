@@ -14,7 +14,7 @@ image:
   pullSecret: ""
 
 service:
-  port: 8080
+  port: 8000  # garmin-mcp-http 기본 포트 (MCP_PORT, README.md "원격 실행" 참고)
 
 route:
   enabled: false
