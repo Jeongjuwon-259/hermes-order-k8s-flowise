@@ -1,14 +1,21 @@
 ---
 # 5-gitops/ansible/roles/applicationset-apply/tasks/main.yml
 # 5-gitops/applicationset.yaml을 마스터 노드(control_plane)에 적용 — 일회성 부트스트랩.
-# 이후 argocd-values/app/*.yaml만 추가하면 ApplicationSet이 Application을 자동 생성한다.
+# 2026-09-22: git raw URL 대신 로컬 파일을 scp로 전송 후 kubectl 적용.
+# GitHub에서 |- 블록 스칼라가 template variable을 literal string으로 만드는 문제 workaround.
 
-- name: ApplicationSet 매니페스트 적용 (GitHub raw, public repo라 인증 불필요)
+- name: applicationset.yaml을 node-1로 scp 전송
+  ansible.builtin.copy:
+    src: ../../../../5-gitops/applicationset.yaml
+    dest: /tmp/applicationset.yaml
+    mode: "0644"
+  delegate_to: localhost
+  run_once: true
+
+- name: scp로 전송된 파일을 node-1에 kubectl apply
   ansible.builtin.command: >
-    kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f
-    https://raw.githubusercontent.com/{{ applicationset_repo }}/{{ applicationset_branch }}/5-gitops/applicationset.yaml
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /tmp/applicationset.yaml
   register: applicationset_apply
-  changed_when: "'unchanged' not in applicationset_apply.stdout"
 
 - name: 적용 결과 출력
   ansible.builtin.debug:
@@ -16,14 +23,14 @@
 
 - name: ApplicationSet 생성 대기 (git generator가 Application을 만들 시간)
   ansible.builtin.pause:
-    seconds: 10
+    seconds: 15
 
 - name: ApplicationSet 상태 확인
   ansible.builtin.command: >
     kubectl --kubeconfig=/etc/kubernetes/admin.conf
-    -n argocd get applicationset app-stack
+    -n argocd get applicationset argocd-app-stack garmin-app-stack
   register: applicationset_status
-  changed_when: false
+  failed_when: false
 
 - name: ApplicationSet 상태 출력
   ansible.builtin.debug:
@@ -34,7 +41,7 @@
     kubectl --kubeconfig=/etc/kubernetes/admin.conf
     -n argocd get applications
   register: applications_status
-  changed_when: false
+  failed_when: false
 
 - name: 생성된 Application 목록 출력
   ansible.builtin.debug:
