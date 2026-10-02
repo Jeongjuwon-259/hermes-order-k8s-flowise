@@ -1,35 +1,44 @@
 # Garmin Connect MCP Server — Dockerfile
-# 소스: https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp (README.md 기준, 2026-09-23 갱신)
+# 실제 소스: https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp.git
+# (소스코드는 이 레포가 아니라 위 레포에서 관리됨 — 여기서는 git clone으로 받아 빌드만 한다)
+#
 # 사용법: docker build -t garmin_mcp:latest -f Dockerfile_garmin_mcp .
 #
 # K8s/컨테이너 배포는 stdio가 아니라 garmin-mcp-http(streamable-http) 진입점을 쓴다.
-# (Claude Desktop 로컬 실행용 garmin-mcp(stdio)는 여기서 안 씀 — README.md "원격 실행" 참고)
+# (Claude Desktop 로컬 실행용 garmin-mcp(stdio)는 여기서 안 씀 — 실제 레포 README "원격 실행" 참고)
 
 FROM python:3.12-slim
 
-# UV 사용 (pip보다 빠름, pyproject.toml/uv.lock과 호환)
-RUN pip install --no-cache-dir uv
+ARG GARMIN_MCP_REPO=https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp.git
+ARG GARMIN_MCP_REF=main
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# 의존성 정의만 먼저 복사 (레이어 캐시 활용)
-COPY pyproject.toml uv.lock ./
+# 실제 소스 레포를 직접 clone (private repo이므로 GitHub PAT 필요).
+# BuildKit --secret으로 주입 — 이미지 레이어/히스토리에 토큰이 남지 않는다.
+# 빌드 명령: docker build --secret id=github_pat,env=GITHUB_PAT -t garmin_mcp:latest -f Dockerfile_garmin_mcp .
+RUN --mount=type=secret,id=github_pat \
+    GITHUB_PAT="$(cat /run/secrets/github_pat)" \
+    && REPO_HOST_PATH="${GARMIN_MCP_REPO#https://}" \
+    && git clone --branch "${GARMIN_MCP_REF}" --depth 1 \
+       "https://x-access-token:${GITHUB_PAT}@${REPO_HOST_PATH}" .
 
-# 소스 전체 복사 (hatchling 빌드/editable install 모두 src/ 트리가 있어야 동작함 —
-# COPY . .를 install보다 먼저 해야 함, 순서 뒤바뀌면 빌드 실패)
-COPY . .
-
-# lock 파일 기준으로 설치 (hatchling 빌드 시스템, pyproject.toml [project.scripts] 기준
+# 소스 레포가 uv.lock을 git에 커밋하지 않으므로(.gitignore 대상) --frozen 불가.
+# 매 빌드마다 lock을 새로 계산 (hatchling 빌드 시스템, pyproject.toml [project.scripts] 기준
 # garmin-mcp-http 콘솔 스크립트까지 함께 설치됨)
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-# Garmin Connect 인증 토큰 저장 경로 (README.md "환경 변수" 참고, 실제 토큰은
-# K8s Secret(GARMINTOKENS, base64) 또는 SealedSecret으로 주입 — 이미지엔 안 넣음)
+# Garmin Connect 인증 토큰 저장 경로 (실제 토큰은 K8s Secret(GARMINTOKENS, base64) 또는
+# SealedSecret으로 주입 — 이미지엔 안 넣음)
 ENV GARMIN_TOKEN_DIR=/root/.garminconnect
 
-# http_main.py 기본값과 동일 (README.md "원격 실행" 표 참고)
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=8000
 

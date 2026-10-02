@@ -1,0 +1,163 @@
+---
+# 5-gitops/ansible/garmin-mcp-build-deploy.yml
+# 이미지 빌드(node-1) → 워커 노드 전달(node-2)까지만 담당한다.
+# Pod 배포/재시작은 여기서 하지 않는다 — ArgoCD ApplicationSet이 담당
+# (argocd-values/app/garmin-mcp-values.yaml 변경 → git push → ArgoCD auto-sync).
+#
+# 소스코드는 이 레포가 아니라 실제 소스 레포에서 git clone으로 받는다:
+#   https://github.com/Jeongjuwon-259/hermes-garmin-connect-mcp.git
+# 여기서 관리하는 건 Dockerfile_garmin_mcp 하나뿐.
+#
+# Usage: ansible-playbook garmin-mcp-build-deploy.yml -i inventory/hosts.ini \
+#        --ask-become-pass --vault-password-file .vault_pass
+
+- name: Build garmin-mcp image on node-1 (git clone + docker build)
+  hosts: node-1
+  become: yes
+  gather_facts: no
+  vars:
+    local_source_dir: "{{ playbook_dir }}/../argocd-defaults"
+    build_dir: /opt/garmin-mcp
+    tarball_path: /tmp/garmin_mcp-latest.tar
+
+  tasks:
+    # 1. 빌드 디렉토리 생성 (git clone 대상은 Dockerfile 내부에서 처리하므로
+    #    여기는 Dockerfile 하나만 올려두면 된다 — docker build 컨텍스트 자체는 비어있어도 무방)
+    - name: Ensure build directory exists
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        owner: admin
+        group: admin
+        mode: "0755"
+
+    # 2. Dockerfile만 전달 (소스는 Dockerfile 내부 git clone으로 받음)
+    - name: Copy Dockerfile_garmin_mcp to node-1
+      ansible.builtin.copy:
+        src: "{{ local_source_dir }}/Dockerfile_garmin_mcp"
+        dest: "{{ build_dir }}/Dockerfile"
+        owner: admin
+        group: admin
+        mode: "0644"
+
+    # 3. 기존 이미지 삭제 (clean rebuild)
+    - name: Remove existing garmin_mcp:latest image on node-1
+      ansible.builtin.command: docker rmi -f garmin_mcp:latest
+      register: rmi_result
+      failed_when: false
+      changed_when: "'No such image' not in rmi_result.stderr"
+
+    # 4. Docker 이미지 빌드 (--no-cache: git clone 레이어가 캐시되면
+    #    실제 레포의 최신 커밋을 못 받아오므로 항상 무효화)
+    # GitHub PAT는 group_vars/vault.yml(github_pat, ansible-vault 암호화)에서 가져와
+    # BuildKit --secret으로 주입 — 이미지 레이어/히스토리에 토큰이 남지 않는다.
+    - name: Build garmin_mcp Docker image (git clone from source repo, PAT via buildkit secret)
+      ansible.builtin.command:
+        cmd: docker build --no-cache --secret id=github_pat,env=GITHUB_PAT -t garmin_mcp:latest {{ build_dir }}
+      environment:
+        DOCKER_BUILDKIT: "1"
+        GITHUB_PAT: "{{ github_pat }}"
+      register: build_result
+      changed_when: build_result.rc == 0
+      timeout: 600
+
+    - name: Show build result
+      ansible.builtin.debug:
+        var: build_result.stdout_lines
+
+    # 5. 이미지 검증
+    - name: Verify garmin_mcp image on node-1
+      ansible.builtin.command: docker images garmin_mcp
+      register: image_result
+      changed_when: false
+
+    - name: Show final image on node-1
+      ansible.builtin.debug:
+        var: image_result.stdout
+
+    # 6. 이미지 tarball로 export
+    - name: Save garmin_mcp image to tarball
+      ansible.builtin.command:
+        cmd: "docker save garmin_mcp:latest -o {{ tarball_path }}"
+      register: save_result
+      changed_when: save_result.rc == 0
+
+    # 7. tarball 소유권 수정 (scp 허용)
+    - name: Fix tarball ownership for scp
+      ansible.builtin.file:
+        path: "{{ tarball_path }}"
+        owner: admin
+        group: admin
+        mode: "0644"
+
+    - name: Show tarball size
+      ansible.builtin.stat:
+        path: "{{ tarball_path }}"
+      register: tarball_stat
+
+    - name: Show tarball size
+      ansible.builtin.debug:
+        msg: "Tarball size: {{ (tarball_stat.stat.size / 1024 / 1024) | round(1) }} MB"
+
+
+- name: Transfer image to node-2 (worker)
+  hosts: node-2
+  become: yes
+  gather_facts: no
+  vars:
+    tarball_path: /tmp/garmin_mcp-latest.tar
+    tarball_dest: /tmp/garmin_mcp-latest.tar
+
+  tasks:
+    # 1. node-1에서 tarball scp (sshkey 사용 — sshpass/admin 방식은 node-2에서 실패하므로 금지)
+    - name: Transfer garmin_mcp tarball from node-1 to node-2
+      ansible.builtin.command:
+        cmd: >
+          scp -i /home/admin/.ssh/garmin_node2 -o StrictHostKeyChecking=no
+          admin@node-1:{{ tarball_path }} {{ tarball_dest }}
+      register: scp_result
+      changed_when: scp_result.rc == 0
+      retries: 3
+      delay: 5
+      until: scp_result.rc == 0
+
+    # 2. 기존 node-2 이미지 삭제 (로드 실패 대비)
+    - name: Remove old garmin_mcp:latest on node-2 (if exists)
+      ansible.builtin.command: docker rmi -f garmin_mcp:latest
+      register: rmi_result2
+      failed_when: false
+      changed_when: "'No such image' not in rmi_result2.stderr"
+
+    # 3. Docker load (tarball → node-2)
+    - name: Load garmin_mcp image on node-2
+      ansible.builtin.command:
+        cmd: docker load -i {{ tarball_dest }}
+      register: load_result
+      changed_when: load_result.rc == 0
+
+    # 4. 이미지 검증 (node-2)
+    - name: Verify garmin_mcp image on node-2
+      ansible.builtin.command: docker images garmin_mcp
+      register: image_result2
+      changed_when: false
+
+    - name: Show final image on node-2
+      ansible.builtin.debug:
+        var: image_result2.stdout
+
+    # 5. tarball 정리 (양쪽 노드)
+    - name: Cleanup tarball on node-2
+      ansible.builtin.file:
+        path: "{{ tarball_dest }}"
+        state: absent
+
+    - name: Cleanup tarball on node-1
+      ansible.builtin.file:
+        path: "{{ tarball_path }}"
+        state: absent
+      delegate_to: node-1
+      become: yes
+
+    # 배포(Deployment rollout)는 여기서 하지 않는다.
+    # garmin-mcp-values.yaml을 git에 push하면 ArgoCD ApplicationSet이
+    # 자동 sync하여 Pod를 재생성한다 (README.md 설계 원칙).
