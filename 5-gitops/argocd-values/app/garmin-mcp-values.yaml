@@ -41,10 +41,14 @@ env:
     value: "true"
 
 # Secret을 Deployment에 envFrom으로 주입한다 (Secret 이름 목록).
-# 지금은 비워 둔다 (Secret 단계는 나중에). 켤 때:
-#   1) 아래 sealedSecrets에 봉인값 붙여넣기  2) envFromSecrets에 garmin-mcp-secret 추가
+# 지금은 비워 둔다. 켤 때:
+#   1) Secret 만들기 — 둘 중 하나:
+#        a) 확인/임시: node-1에서 argocd-garmin-templates/create-garmin-secret.sh (클러스터에 직접 생성, Git에 값이 안 남음)
+#        b) GitOps: 아래 sealedSecrets에 seal-garmin-secret.sh 봉인값 붙여넣기
+#   2) envFromSecrets에 garmin-mcp-secret 추가
 #   3) 위 env의 MCP_AUTH_DISABLED 삭제
-# ⚠️ 봉인값 없이 2)만 하면 Secret이 없어서 새 파드가 시작되지 못한다 (기존 파드는 유지됨).
+# ⚠️ 이 저장소는 PUBLIC이다. 평문 토큰을 values/템플릿에 넣지 말 것 (커밋 히스토리에 영구히 남는다).
+# ⚠️ Secret 없이 2)만 하면 새 파드가 시작되지 못한다 (기존 파드는 유지됨).
 # (토큰이 설정되면 MCP_AUTH_DISABLED=true여도 인증은 강제된다 — 그래도 3)에서 지울 것)
 envFromSecrets: []
 # envFromSecrets:
