@@ -32,4 +32,22 @@ env:
   - name: GARMIN_TOKEN_DIR
     value: "/root/.garminconnect"
 
-# garmin 인증 관련 SealedSecret은 이번 단계에서 제외 (argocd-defaults/README.md §4)
+# Secret을 Deployment에 envFrom으로 주입한다 (Secret 이름 목록).
+# ⚠️ 아래 sealedSecrets에 봉인값을 붙여넣기 전에는 이 Secret이 없어서 새 파드가 시작되지 못한다
+#    (기존 파드는 롤링 업데이트 특성상 유지됨). 소스 레포의 garmin-mcp-http는 MCP_AUTH_TOKENS가 없으면
+#    기동을 거부한다 (fail-closed).
+envFromSecrets:
+  - garmin-mcp-secret
+
+# 이 Secret의 키 2개:
+#   MCP_AUTH_TOKENS : /mcp Bearer 토큰 (쉼표로 여러 개, 각 24자 이상)
+#   GARMINTOKENS    : ~/.garminconnect/garmin_tokens.json 의 원본 JSON 문자열 (base64 아님)
+# 봉인: argocd-garmin-templates/seal-garmin-secret.sh 로 encryptedData를 만들어 붙여넣는다.
+# 이름(garmin-mcp-secret)과 네임스페이스(garmin)는 봉인 시점과 같아야 한다 (strict scope).
+sealedSecrets: []
+# sealedSecrets:
+#   - name: garmin-mcp-secret
+#     type: Opaque
+#     encryptedData:
+#       MCP_AUTH_TOKENS: AgBy...   # kubeseal --raw 출력
+#       GARMINTOKENS: AgBy...      # kubeseal --raw 출력 (원본 JSON을 봉인)

@@ -35,8 +35,9 @@ RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-# Garmin Connect 인증 토큰 저장 경로 (실제 토큰은 K8s Secret(GARMINTOKENS, base64) 또는
-# SealedSecret으로 주입 — 이미지엔 안 넣음)
+# Garmin Connect 인증 토큰 저장 경로. 실제 토큰은 SealedSecret(garmin-mcp-secret)으로 주입 — 이미지엔 안 넣음:
+#   GARMINTOKENS    = garmin_tokens.json의 "원본 JSON 문자열" (Base64 아님 — Base64는 조용히 무시됨)
+#   MCP_AUTH_TOKENS = /mcp Bearer 토큰 (필수 — 없으면 garmin-mcp-http가 기동을 거부함)
 ENV GARMIN_TOKEN_DIR=/root/.garminconnect
 
 ENV MCP_HOST=0.0.0.0

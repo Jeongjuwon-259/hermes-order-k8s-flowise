@@ -68,7 +68,14 @@ docker build -t garmin_mcp:latest -f 5-gitops/argocd-defaults/Dockerfile_garmin_
 - **네임스페이스:** `garmin`
 - **프로젝트명:** `mcp` (fully qualified: `garmin-mcp`, 이미지명: `garmin_mcp`)
 - **Dockerfile:** `5-gitops/argocd-defaults/Dockerfile_garmin_mcp`
-- **인증(garmin auth) 관련 처리는 이번 단계에서 제외** — 추후 해당 소스 자체에서 해결. 이번 단계는 빌드/배포 파이프라인 검증에 집중한다.
+- **인증 (2026-10 반영):** 소스 레포의 `garmin-mcp-http`는 `/mcp`에 Bearer 토큰을 요구하고,
+  `MCP_AUTH_TOKENS`가 없으면 기동을 거부한다 (`/health`만 면제). 두 값을 SealedSecret `garmin-mcp-secret`으로 주입한다:
+  - `MCP_AUTH_TOKENS` — Bearer 토큰 (쉼표로 여러 개, 각 24자 이상)
+  - `GARMINTOKENS` — `garmin_tokens.json`의 **원본 JSON 문자열** (Base64 아님 — Base64는 파일 경로로 취급되어 조용히 무시됨, 실측 확인)
+  - 봉인은 `5-gitops/argocd-garmin-templates/seal-garmin-secret.sh`, 값은 `argocd-values/app/garmin-mcp-values.yaml`의 `sealedSecrets`에 붙여넣는다.
+  - ⚠️ 이 서버 이미지는 소스 레포 `main`을 clone하므로, 인증 코드가 `main`에 push된 뒤에 빌드해야 인증이 켜진다.
+  - 미해결: Garmin refresh 토큰은 갱신할 때마다 바뀐다. `GARMINTOKENS`(환경변수)로 넣은 토큰은 갱신돼도 저장되지 않아
+    파드가 재시작되면 옛 토큰으로 돌아간다 — 영속화(PVC)는 별도로 결정한다.
 
 ---
 
@@ -117,4 +124,5 @@ ansible-playbook applicationset-apply-playbook.yml
 3. ArgoCD repo 연결 자동화 (PAT + Sealed Secrets) 절차 확정
 4. `5-gitops/argocd-values/app/`에 MCP 서버용 values 파일 추가 →
    ApplicationSet(`5-gitops/applicationset.yaml`)이 자동으로 Application 생성하는지 검증
-5. 검증 완료 후 garmin auth 인증 통합 검토
+5. ~~garmin auth 인증 통합~~ — Bearer 인증 + Secret 주입은 §4에 반영됨 (봉인값 붙여넣기·sync 검증 필요).
+   남은 것: Garmin 토큰 갱신 영속화(PVC), Dockerfile의 `.git/config` PAT 잔존 제거
