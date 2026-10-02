@@ -125,4 +125,6 @@ ansible-playbook applicationset-apply-playbook.yml
 4. `5-gitops/argocd-values/app/`에 MCP 서버용 values 파일 추가 →
    ApplicationSet(`5-gitops/applicationset.yaml`)이 자동으로 Application 생성하는지 검증
 5. ~~garmin auth 인증 통합~~ — Bearer 인증 + Secret 주입은 §4에 반영됨 (봉인값 붙여넣기·sync 검증 필요).
-   남은 것: Garmin 토큰 갱신 영속화(PVC), Dockerfile의 `.git/config` PAT 잔존 제거
+   남은 것: Garmin 토큰 갱신 영속화(PVC).
+   (Dockerfile의 `.git/config` PAT 잔존은 `http.extraHeader` + `rm -rf .git`로 수정 — 재빌드 후
+   `kubectl -n garmin exec deploy/garmin-mcp -- ls /app/.git`이 "No such file"인지 확인, 옛 이미지의 PAT는 폐기/교체)

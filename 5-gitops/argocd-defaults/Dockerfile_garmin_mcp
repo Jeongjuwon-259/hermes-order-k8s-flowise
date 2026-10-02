@@ -20,13 +20,16 @@ RUN apt-get update \
 WORKDIR /app
 
 # 실제 소스 레포를 직접 clone (private repo이므로 GitHub PAT 필요).
-# BuildKit --secret으로 주입 — 이미지 레이어/히스토리에 토큰이 남지 않는다.
+# BuildKit --secret으로 주입한다. 토큰을 URL에 넣으면 clone이 그 URL을 .git/config의 remote.origin.url에
+# 저장해서 /app/.git/config로 이미지에 남는다 (2026-10 실측: kubectl exec로 확인됨).
+# 그래서 토큰은 URL이 아니라 `git -c http.extraHeader`(해당 명령 한 번에만 적용, config에 저장 안 됨)로 넘기고,
+# 빌드에 필요 없는 .git은 지운다.
 # 빌드 명령: docker build --secret id=github_pat,env=GITHUB_PAT -t garmin_mcp:latest -f Dockerfile_garmin_mcp .
 RUN --mount=type=secret,id=github_pat \
-    GITHUB_PAT="$(cat /run/secrets/github_pat)" \
-    && REPO_HOST_PATH="${GARMIN_MCP_REPO#https://}" \
-    && git clone --branch "${GARMIN_MCP_REF}" --depth 1 \
-       "https://x-access-token:${GITHUB_PAT}@${REPO_HOST_PATH}" .
+    AUTH="$(printf 'x-access-token:%s' "$(cat /run/secrets/github_pat)" | base64 -w0)" \
+    && git -c "http.extraHeader=Authorization: Basic ${AUTH}" clone \
+       --branch "${GARMIN_MCP_REF}" --depth 1 "${GARMIN_MCP_REPO}" . \
+    && rm -rf .git
 
 # 소스 레포가 uv.lock을 git에 커밋하지 않으므로(.gitignore 대상) --frozen 불가.
 # 매 빌드마다 lock을 새로 계산 (hatchling 빌드 시스템, pyproject.toml [project.scripts] 기준
