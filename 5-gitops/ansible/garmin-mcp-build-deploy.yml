@@ -82,6 +82,19 @@
       register: save_result
       changed_when: save_result.rc == 0
 
+    # Docker images live in containerd's moby namespace; Kubernetes uses k8s.io.
+    # Import explicitly so imagePullPolicy: Never sees the freshly built image.
+    - name: Import garmin_mcp image into Kubernetes containerd on node-1
+      ansible.builtin.command:
+        cmd: "ctr -n k8s.io images import --platform linux/arm64 {{ tarball_path }}"
+      register: containerd_import_result
+      changed_when: containerd_import_result.rc == 0
+
+    - name: Verify garmin_mcp image in Kubernetes containerd on node-1
+      ansible.builtin.command:
+        cmd: ctr -n k8s.io images inspect docker.io/library/garmin_mcp:latest
+      changed_when: false
+
     # 7. tarball 소유권 수정 (scp 허용)
     - name: Fix tarball ownership for scp
       ansible.builtin.file:
@@ -134,6 +147,17 @@
         cmd: docker load -i {{ tarball_dest }}
       register: load_result
       changed_when: load_result.rc == 0
+
+    - name: Import garmin_mcp image into Kubernetes containerd on node-2
+      ansible.builtin.command:
+        cmd: "ctr -n k8s.io images import --platform linux/arm64 {{ tarball_dest }}"
+      register: containerd_import_result2
+      changed_when: containerd_import_result2.rc == 0
+
+    - name: Verify garmin_mcp image in Kubernetes containerd on node-2
+      ansible.builtin.command:
+        cmd: ctr -n k8s.io images inspect docker.io/library/garmin_mcp:latest
+      changed_when: false
 
     # 4. 이미지 검증 (node-2)
     - name: Verify garmin_mcp image on node-2
