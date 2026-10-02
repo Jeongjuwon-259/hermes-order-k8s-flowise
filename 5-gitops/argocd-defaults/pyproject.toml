@@ -10,7 +10,8 @@ dependencies = [
 ]
 
 [project.scripts]
-garmin-mcp = "garmin_mcp:main"
+garmin-mcp = "garmin_mcp.stdio_main:main"
+garmin-mcp-http = "garmin_mcp.http_main:main"
 
 [build-system]
 requires = ["hatchling"]
