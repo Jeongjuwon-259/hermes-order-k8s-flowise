@@ -122,11 +122,12 @@
     tarball_dest: /tmp/garmin_mcp-latest.tar
 
   tasks:
-    # 1. node-1에서 tarball scp (sshkey 사용 — sshpass/admin 방식은 node-2에서 실패하므로 금지)
+    # 1. node-1에서 tarball scp (sshpass로 password auth — sshkey garmin_node2는
+    #    노드에 따라 시점이 달라지므로 ansible inventory의 ansible_password 사용)
     - name: Transfer garmin_mcp tarball from node-1 to node-2
       ansible.builtin.command:
         cmd: >
-          scp -i /home/admin/.ssh/garmin_node2 -o StrictHostKeyChecking=no
+          sshpass -p admin scp -o StrictHostKeyChecking=no
           admin@node-1:{{ tarball_path }} {{ tarball_dest }}
       register: scp_result
       changed_when: scp_result.rc == 0
