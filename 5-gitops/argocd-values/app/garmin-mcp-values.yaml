@@ -31,13 +31,24 @@ resources:
 env:
   - name: GARMIN_TOKEN_DIR
     value: "/root/.garminconnect"
+  # ⚠️ 임시 — Secret 없이 파이프라인(빌드→배포→기동)만 먼저 검증하는 동안만 사용한다.
+  #    소스 레포의 garmin-mcp-http는 MCP_AUTH_TOKENS가 없으면 기동을 거부(fail-closed)하므로,
+  #    명시적으로 인증을 끈다. 이 상태에서는 /mcp가 인증 없이 열려 있다 (Service는 ClusterIP, route 비활성이라
+  #    클러스터 내부에서만 접근 가능). Garmin 토큰(GARMINTOKENS)도 없어서 /health와 MCP 프로토콜
+  #    (initialize, tools/list)은 되지만 Garmin 데이터를 가져오는 도구는 인증 오류가 난다.
+  #    Secret을 붙일 때(아래 envFromSecrets 참고) 이 항목을 삭제할 것.
+  - name: MCP_AUTH_DISABLED
+    value: "true"
 
 # Secret을 Deployment에 envFrom으로 주입한다 (Secret 이름 목록).
-# ⚠️ 아래 sealedSecrets에 봉인값을 붙여넣기 전에는 이 Secret이 없어서 새 파드가 시작되지 못한다
-#    (기존 파드는 롤링 업데이트 특성상 유지됨). 소스 레포의 garmin-mcp-http는 MCP_AUTH_TOKENS가 없으면
-#    기동을 거부한다 (fail-closed).
-envFromSecrets:
-  - garmin-mcp-secret
+# 지금은 비워 둔다 (Secret 단계는 나중에). 켤 때:
+#   1) 아래 sealedSecrets에 봉인값 붙여넣기  2) envFromSecrets에 garmin-mcp-secret 추가
+#   3) 위 env의 MCP_AUTH_DISABLED 삭제
+# ⚠️ 봉인값 없이 2)만 하면 Secret이 없어서 새 파드가 시작되지 못한다 (기존 파드는 유지됨).
+# (토큰이 설정되면 MCP_AUTH_DISABLED=true여도 인증은 강제된다 — 그래도 3)에서 지울 것)
+envFromSecrets: []
+# envFromSecrets:
+#   - garmin-mcp-secret
 
 # 이 Secret의 키 2개:
 #   MCP_AUTH_TOKENS : /mcp Bearer 토큰 (쉼표로 여러 개, 각 24자 이상)
