@@ -10,7 +10,7 @@ replicaCount: 1
 
 image:
   repository: garmin_mcp
-  tag: latest
+  tag: 9f4037b
   pullSecret: ""
 
 service:

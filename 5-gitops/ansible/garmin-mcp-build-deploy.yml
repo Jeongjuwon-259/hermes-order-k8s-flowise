@@ -18,7 +18,9 @@
   vars:
     local_source_dir: "{{ playbook_dir }}/../argocd-defaults"
     build_dir: /opt/garmin-mcp
-    tarball_path: /tmp/garmin_mcp-latest.tar
+    image_tag: "{{ build_image_tag | default('latest') }}"
+    source_ref: "{{ build_source_ref | default('main') }}"
+    tarball_path: "/tmp/garmin_mcp-{{ image_tag }}.tar"
 
   tasks:
     # 1. 빌드 디렉토리 생성 (git clone 대상은 Dockerfile 내부에서 처리하므로
@@ -41,8 +43,8 @@
         mode: "0644"
 
     # 3. 기존 이미지 삭제 (clean rebuild)
-    - name: Remove existing garmin_mcp:latest image on node-1
-      ansible.builtin.command: docker rmi -f garmin_mcp:latest
+    - name: Remove existing garmin_mcp:{{ image_tag }} image on node-1
+      ansible.builtin.command: docker rmi -f garmin_mcp:{{ image_tag }}
       register: rmi_result
       failed_when: false
       changed_when: "'No such image' not in rmi_result.stderr"
@@ -53,7 +55,10 @@
     # BuildKit --secret으로 주입 — 이미지 레이어/히스토리에 토큰이 남지 않는다.
     - name: Build garmin_mcp Docker image (git clone from source repo, PAT via buildkit secret)
       ansible.builtin.command:
-        cmd: docker build --no-cache --secret id=github_pat,env=GITHUB_PAT -t garmin_mcp:latest {{ build_dir }}
+        cmd: >-
+          docker build --no-cache --secret id=github_pat,env=GITHUB_PAT
+          --build-arg GARMIN_MCP_REF={{ source_ref | quote }}
+          -t garmin_mcp:{{ image_tag }} {{ build_dir }}
       environment:
         DOCKER_BUILDKIT: "1"
         GITHUB_PAT: "{{ github_pat }}"
@@ -78,7 +83,7 @@
     # 6. 이미지 tarball로 export
     - name: Save garmin_mcp image to tarball
       ansible.builtin.command:
-        cmd: "docker save garmin_mcp:latest -o {{ tarball_path }}"
+        cmd: "docker save garmin_mcp:{{ image_tag }} -o {{ tarball_path }}"
       register: save_result
       changed_when: save_result.rc == 0
 
@@ -92,7 +97,7 @@
 
     - name: Verify garmin_mcp image in Kubernetes containerd on node-1
       ansible.builtin.command:
-        cmd: ctr -n k8s.io images inspect docker.io/library/garmin_mcp:latest
+        cmd: ctr -n k8s.io images inspect docker.io/library/garmin_mcp:{{ image_tag }}
       changed_when: false
 
     # 7. tarball 소유권 수정 (scp 허용)
@@ -118,8 +123,9 @@
   become: yes
   gather_facts: no
   vars:
-    tarball_path: /tmp/garmin_mcp-latest.tar
-    tarball_dest: /tmp/garmin_mcp-latest.tar
+    image_tag: "{{ build_image_tag | default('latest') }}"
+    tarball_path: "/tmp/garmin_mcp-{{ image_tag }}.tar"
+    tarball_dest: "/tmp/garmin_mcp-{{ image_tag }}.tar"
 
   tasks:
     # 1. node-1에서 tarball scp (sshpass로 password auth — sshkey garmin_node2는
@@ -136,8 +142,8 @@
       until: scp_result.rc == 0
 
     # 2. 기존 node-2 이미지 삭제 (로드 실패 대비)
-    - name: Remove old garmin_mcp:latest on node-2 (if exists)
-      ansible.builtin.command: docker rmi -f garmin_mcp:latest
+    - name: Remove old garmin_mcp:{{ image_tag }} on node-2 (if exists)
+      ansible.builtin.command: docker rmi -f garmin_mcp:{{ image_tag }}
       register: rmi_result2
       failed_when: false
       changed_when: "'No such image' not in rmi_result2.stderr"
@@ -157,7 +163,7 @@
 
     - name: Verify garmin_mcp image in Kubernetes containerd on node-2
       ansible.builtin.command:
-        cmd: ctr -n k8s.io images inspect docker.io/library/garmin_mcp:latest
+        cmd: ctr -n k8s.io images inspect docker.io/library/garmin_mcp:{{ image_tag }}
       changed_when: false
 
     # 4. 이미지 검증 (node-2)
